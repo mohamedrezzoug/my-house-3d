@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>MY HOUSE 3D – منزلك قبل بنائه</title>
+<link rel="manifest" href="manifest.json"><link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#0f766e">
+<style>
+:root{--bg:#0f172a;--panel:#1e293b;--line:#334155;--acc:#14b8a6;--txt:#e2e8f0;--mut:#94a3b8}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;overflow:hidden}
+header{height:48px;display:flex;align-items:center;gap:12px;padding:0 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+header h1{font-size:16px;color:var(--acc);white-space:nowrap}
+header small{color:var(--mut);font-size:12px}
+#app{display:grid;grid-template-columns:1fr 1fr;height:calc(100% - 48px - 210px)}
+@media(max-width:800px){#app{grid-template-columns:1fr;grid-template-rows:1fr 1fr;height:calc(100% - 48px - 250px)}}
+.pane{position:relative;overflow:hidden;border-inline-end:1px solid var(--line)}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+.tag{position:absolute;top:8px;inset-inline-start:8px;background:#0008;padding:3px 10px;border-radius:12px;font-size:12px;pointer-events:none}
+#bar{height:210px;background:var(--panel);border-top:1px solid var(--line);padding:8px 10px;display:flex;gap:14px;flex-wrap:wrap;overflow:auto;align-content:flex-start}
+@media(max-width:800px){#bar{height:250px}}
+.grp{display:flex;flex-direction:column;gap:5px;min-width:130px}
+.grp>b{font-size:11px;color:var(--mut);font-weight:600}
+.row{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+button,select,input,textarea{font:inherit;font-size:13px;background:#0f172a;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+button{cursor:pointer}
+button.on{background:var(--acc);color:#042f2e;border-color:var(--acc);font-weight:700}
+button.big{background:#7c3aed;border-color:#7c3aed;font-weight:700}
+button:hover{border-color:var(--acc)}
+input[type=number]{width:62px}
+input[type=color]{width:34px;height:30px;padding:1px}
+textarea{width:290px;height:62px;resize:none;line-height:1.4}
+.stat{font-size:13px;line-height:1.7}
+.stat b{color:var(--acc)}
+.warn{font-size:10.5px;color:var(--mut);max-width:260px;line-height:1.4}
+#aiMsg{font-size:12px;color:#c4b5fd;max-width:290px;line-height:1.5}
+#ov{position:fixed;inset:0;background:#000b;display:none;z-index:50;overflow:auto;padding:16px}
+#ov .box{max-width:760px;margin:0 auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+#ov h2{font-size:16px;color:var(--acc);margin:14px 0 6px}
+#ov h2:first-child{margin-top:0}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{padding:5px 8px;border-bottom:1px solid var(--line);text-align:start}
+th{color:var(--mut);font-weight:600}
+td.n,th.n{text-align:end;font-variant-numeric:tabular-nums}
+.ok{color:#4ade80}.ko{color:#f87171}
+</style>
+</head>
+<body>
+<header>
+  <h1>🏠 MY HOUSE 3D</h1><small>منزلك قبل بنائه – نموذج أولي</small>
+</header>
+<div id="app">
+  <div class="pane"><canvas id="c2d"></canvas><div class="tag">المخطط 2D – الطابق <span id="flTag">RDC</span></div></div>
+  <div class="pane"><canvas id="c3d"></canvas><div class="tag">المنزل 3D</div></div>
+</div>
+<div id="bar">
+  <div class="grp"><b>🤖 AI Architect – وصف المشروع</b>
+    <textarea id="aiTxt" placeholder="مثال: عندي أرض مساحتها 120 متر مربع، بغيت منزل من طابقين، فيه 3 غرف نوم، صالون كبير، مطبخ ومرآب، والميزانية ديالي 650 ألف درهم"></textarea>
+    <div class="row"><button id="aiGo" class="big">✨ صمم المنزل</button><small class="warn">من بعد جرب: «كبر الصالون»، «بدل مكان المطبخ»، «زيد غرفة»، «زيد طابق»</small></div>
+    <div id="aiMsg"></div>
+  </div>
+  <div class="grp"><b>📥 استيراد مخطط 2D معماري</b>
+    <div class="row"><button id="impBtn" class="big">📥 صورة / DXF</button><input type="file" id="impFile" accept="image/*,.dxf,.pdf,application/pdf" style="display:none"></div>
+    <div id="impPanel" style="display:none;gap:5px;flex-direction:column">
+      <div class="row" id="pdfRow" style="display:none"><label>صفحة PDF <select id="pdfPg"></select></label></div>
+      <div class="row"><button id="bgCal">📏 معايرة</button><button id="bgMove">✋ تحريك الصورة</button><button id="bgDet" class="on">🧱 كشف الجدران</button><button id="bgDel">✖</button></div>
+      <div class="row"><label>شفافية <input type="range" id="bgOp" min="10" max="100" value="60"></label></div>
+      <div class="row" id="calRow" style="display:none"><label>المسافة الحقيقية <input type="number" id="calD" value="5" step="0.1" min="0.1"> م</label><button id="calOk">طبق</button></div>
+    </div>
+    <div id="impMsg" class="warn"></div>
+  </div>
+  <div class="grp"><b>أدوات الرسم</b>
+    <div class="row" id="tools">
+      <button data-t="wall" class="on">🧱 جدار</button>
+      <button data-t="door">🚪 باب</button>
+      <button data-t="window">🪟 نافذة</button>
+      <button data-t="move">✋ تحريك</button>
+      <button data-t="erase">🗑️ مسح</button>
+    </div>
+    <div class="row"><button id="undo">↩️ تراجع</button><button id="clear">مسح الطابق</button><button id="demo">⚡ مثال</button></div>
+  </div>
+  <div class="grp"><b>الأثاث والسلالم</b>
+    <div class="row" id="items">
+      <button data-t="item:stair">🪜 سلم</button>
+      <button data-t="item:sofa">🛋️ صالون</button>
+      <button data-t="item:bed">🛏️ سرير</button>
+      <button data-t="item:table">🍽️ طاولة</button>
+      <button data-t="item:kitchen">🍳 مطبخ</button>
+      <button data-t="item:bath">🛁 حمام</button>
+      <button data-t="item:wardrobe">🗄️ خزانة</button>
+    </div>
+    <div class="row"><button id="rot">🔄 تدوير (R)</button><label>لون <input type="color" id="icol" value="#8b5e3c"></label></div>
+  </div>
+  <div class="grp"><b>الطوابق</b>
+    <div class="row" id="floors"></div>
+    <div class="row"><button id="addFloor">➕ طابق</button><button id="delFloor">➖</button>
+    <label>ارتفاع <input type="number" id="hgt" value="2.8" step="0.1" min="2.2" max="4"> م</label></div>
+  </div>
+  <div class="grp"><b>الأرض والألوان</b>
+    <div class="row"><label>عرض <input type="number" id="lw" value="10" min="4" max="60"></label>
+    <label>طول <input type="number" id="ll" value="12" min="4" max="60"></label></div>
+    <div class="row"><label>جدران <input type="color" id="wcol" value="#f1ebe0"></label><label>أرضية <input type="color" id="fcol" value="#b8b0a2"></label>
+    <label>الجودة <select id="qual"><option value="3200">اقتصادي</option><option value="4200" selected>متوسط</option><option value="5800">فاخر</option></select></label></div>
+  </div>
+  <div class="grp"><b>العرض 3D</b>
+    <div class="row"><button id="vOut" class="on">من الخارج</button><button id="vIn">🚶 ادخل للمنزل</button><button id="vNight">🌙 ليل/نهار</button></div>
+    <div class="warn">وضع الدخول: الأسهم ↑↓←→ للمشي، الفأرة للالتفات</div>
+  </div>
+  <div class="grp"><b>الحصيلة</b>
+    <div class="stat" id="stats"></div>
+    <div class="row"><button id="costBtn" class="big">📊 التكلفة والكميات بالتفصيل</button></div>
+    <div class="row"><button id="exPng3">🖼️ صورة 3D</button><button id="exPng2">📐 صورة المخطط</button><button id="exRep">📄 تقرير</button><button id="exJson">💾 حفظ</button><button id="imJson">📂 فتح</button><input type="file" id="imFile" accept=".json" style="display:none"></div>
+    <div class="warn">تقدير تقريبي ماشي دراسة. ما يعوضش المهندس ولا رخصة البناء ولا تصميم التهيئة.</div>
+  </div>
+</div>
+
+<div id="ov"><div class="box"><div id="ovBody"></div><div class="row" style="margin-top:14px"><button id="ovClose" class="on">إغلاق</button></div></div></div>
+
+<script type="module">
+import * as THREE from './lib/three.module.js';
+import {OrbitControls} from './lib/OrbitControls.js';
+
+/* ================= الحالة ================= */
+const KEY='myhouse3d.v2';
+const defP={ciment:1250,acier:9000,sable:180,gravier:200,brique:2.2,city:1,beton:0.18};
+let S={land:{w:10,l:12},floors:[{walls:[],open:[],items:[],rooms:[]}],cur:0,h:2.8,wc:'#f1ebe0',fc:'#b8b0a2',P:{...defP},ai:null,budget:0};
+try{const x=JSON.parse(localStorage.getItem(KEY));if(x&&x.floors)S=Object.assign(S,x)}catch(e){}
+S.P=Object.assign({},defP,S.P||{});
+S.floors.forEach(f=>{f.items=f.items||[];f.rooms=f.rooms||[]});
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+const $=id=>document.getElementById(id);
+let tool='wall',curRot=0,hist=[];
+const SNAP=0.25,WALL_T=0.2,SL=0.2;
+const snap=v=>Math.round(v/SNAP)*SNAP;
+const F=()=>S.floors[S.cur];
+const pushHist=()=>{hist.push(JSON.stringify(S.floors));if(hist.length>60)hist.shift()};
+const newFloor=()=>({walls:[],open:[],items:[],rooms:[]});
+
+/* ================= الأثاث ================= */
+// parts: [dx, yCentre, dz, w, h, d, couleurFixe?]  — محلياً: -z = ظهر القطعة
+const ITEMS={
+  stair:{n:'سلم',w:1.0,l:4.2,e:'🪜',col:'#a16207'},
+  sofa:{n:'صالون',w:2.2,l:0.95,e:'🛋️',col:'#8b5e3c',parts:[[0,0.2,0,2.2,0.4,0.95],[0,0.65,-0.37,2.2,0.5,0.2],[-1.0,0.5,0,0.2,0.4,0.95],[1.0,0.5,0,0.2,0.4,0.95]]},
+  bed:{n:'سرير',w:1.6,l:2.0,e:'🛏️',col:'#3b82f6',parts:[[0,0.25,0,1.6,0.5,2.0],[0,0.8,-0.97,1.6,0.8,0.06,0x5b3a1e],[-0.4,0.58,-0.7,0.6,0.1,0.35,0xffffff],[0.4,0.58,-0.7,0.6,0.1,0.35,0xffffff]]},
+  table:{n:'طاولة',w:1.6,l:0.9,e:'🍽️',col:'#a16207',parts:[[0,0.75,0,1.6,0.06,0.9],[-0.7,0.36,-0.35,0.06,0.72,0.06],[0.7,0.36,-0.35,0.06,0.72,0.06],[-0.7,0.36,0.35,0.06,0.72,0.06],[0.7,0.36,0.35,0.06,0.72,0.06]]},
+  kitchen:{n:'مطبخ',w:2.4,l:0.6,e:'🍳',col:'#cbd5e1',parts:[[0,0.43,0,2.4,0.86,0.6],[0,0.89,0,2.4,0.04,0.62,0x333333]]},
+  bath:{n:'حمام',w:1.7,l:0.75,e:'🛁',col:'#f8fafc',parts:[[0,0.28,0,1.7,0.56,0.75]]},
+  wardrobe:{n:'خزانة',w:1.8,l:0.6,e:'🗄️',col:'#92400e',parts:[[0,1.0,0,1.8,2.0,0.6]]}
+};
+const RN={salon:'الصالون',kitchen:'المطبخ',bath:'الحمام',bed:'غرفة نوم',garage:'المرآب',hall:'السلم',lounge:'صالة'};
+const dimsOf=(it,rot=it.rot)=>{const d=ITEMS[it.type];return rot%2?[d.l,d.w]:[d.w,d.l]};
+function stairDims(it){return dimsOf(it)}
+
+/* ================= هندسة مساعدة ================= */
+function bb(fl){
+  if(!fl.walls.length)return null;let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  fl.walls.forEach(w=>{x0=Math.min(x0,w.x1,w.x2);x1=Math.max(x1,w.x1,w.x2);y0=Math.min(y0,w.y1,w.y2);y1=Math.max(y1,w.y1,w.y2)});
+  return{x0,y0,x1,y1};
+}
+function nearestWall(x,y,fl=F()){
+  let best=null,bd=0.6;
+  fl.walls.forEach((w,i)=>{
+    const dx=w.x2-w.x1,dy=w.y2-w.y1,L2=dx*dx+dy*dy;if(!L2)return;
+    let t=((x-w.x1)*dx+(y-w.y1)*dy)/L2;t=Math.max(0,Math.min(1,t));
+    const px=w.x1+t*dx,py=w.y1+t*dy,d=Math.hypot(x-px,y-py);
+    if(d<bd){bd=d;best={i,t,px,py}}
+  });return best;
+}
+function hitItem(x,y,fl=F()){
+  for(let i=fl.items.length-1;i>=0;i--){
+    const it=fl.items[i],[w,l]=dimsOf(it);
+    if(Math.abs(x-it.x)<=w/2+0.05&&Math.abs(y-it.y)<=l/2+0.05)return i;
+  }return -1;
+}
+
+/* ================= 2D ================= */
+const c2=$('c2d'),x2=c2.getContext('2d');
+let sc=20,ox=0,oy=0,drag=null,hover=null,dragItem=null;
+let bg=null,calib=[],dragBg=null;
+const DPR=()=>devicePixelRatio||1;
+function fit2(){
+  const r=c2.parentElement.getBoundingClientRect(),d=DPR();
+  c2.width=r.width*d;c2.height=r.height*d;
+  sc=Math.min(r.width/(S.land.w+3),r.height/(S.land.l+3))*d;
+  ox=(c2.width-S.land.w*sc)/2;oy=(c2.height-S.land.l*sc)/2;
+  draw2();
+}
+const toW=(px,py)=>{const r=c2.getBoundingClientRect(),d=c2.width/r.width;return[((px-r.left)*d-ox)/sc,((py-r.top)*d-oy)/sc]};
+function draw2(){
+  const W=c2.width,H=c2.height,d=DPR();x2.clearRect(0,0,W,H);
+  x2.save();x2.translate(ox,oy);
+  x2.fillStyle='#14532d55';x2.fillRect(0,0,S.land.w*sc,S.land.l*sc);
+  if(bg){x2.save();x2.globalAlpha=bg.op;x2.drawImage(bg.img,bg.x*sc,bg.y*sc,bg.img.width*bg.s*sc,bg.img.height*bg.s*sc);x2.restore()}
+  x2.strokeStyle='#22c55e';x2.setLineDash([8,6]);x2.lineWidth=2;x2.strokeRect(0,0,S.land.w*sc,S.land.l*sc);x2.setLineDash([]);
+  x2.strokeStyle='#ffffff10';x2.lineWidth=1;x2.beginPath();
+  for(let i=0;i<=S.land.w;i++){x2.moveTo(i*sc,0);x2.lineTo(i*sc,S.land.l*sc)}
+  for(let j=0;j<=S.land.l;j++){x2.moveTo(0,j*sc);x2.lineTo(S.land.w*sc,j*sc)}
+  x2.stroke();
+  x2.fillStyle='#94a3b8';x2.font=`${11*d}px sans-serif`;
+  x2.fillText(S.land.w+' م',S.land.w*sc/2-10,-6);x2.fillText(S.land.l+' م',S.land.w*sc+4,S.land.l*sc/2);
+  if(S.cur>0)drawWalls(S.floors[S.cur-1],'#ffffff25',WALL_T*sc*0.8,false);
+  // أسماء الغرف
+  x2.textAlign='center';
+  F().rooms.forEach(r=>{
+    x2.fillStyle='#64748b';x2.font=`${11*d}px sans-serif`;
+    x2.fillText(RN[r.k]||r.k,(r.x0+r.x1)/2*sc,(r.y0+r.y1)/2*sc+4*d);
+    if(r.k!=='hall'&&r.k!=='garage'){x2.font=`${9*d}px sans-serif`;x2.fillText(((r.x1-r.x0)*(r.y1-r.y0)).toFixed(0)+' م²',(r.x0+r.x1)/2*sc,(r.y0+r.y1)/2*sc+16*d)}
+  });
+  x2.textAlign='start';
+  drawWalls(F(),'#e2e8f0',Math.max(4,WALL_T*sc),true);
+  F().items.forEach(drawItem2);
+  if(drag&&tool==='wall'){
+    x2.strokeStyle='#14b8a6';x2.lineWidth=Math.max(4,WALL_T*sc);x2.lineCap='round';
+    x2.beginPath();x2.moveTo(drag.x1*sc,drag.y1*sc);x2.lineTo(drag.x2*sc,drag.y2*sc);x2.stroke();
+    const L=Math.hypot(drag.x2-drag.x1,drag.y2-drag.y1);
+    x2.fillStyle='#fff';x2.fillText(L.toFixed(2)+' م',(drag.x1+drag.x2)/2*sc+8,(drag.y1+drag.y2)/2*sc-8);
+  }
+  if(hover&&(tool==='door'||tool==='window')){x2.fillStyle=tool==='door'?'#f59e0b':'#38bdf8';x2.beginPath();x2.arc(hover.px*sc,hover.py*sc,7,0,7);x2.fill()}
+  if(hover&&hover.ghost){drawItem2(hover.ghost,true)}
+  if(calib.length){x2.strokeStyle='#f43f5e';x2.fillStyle='#f43f5e';x2.lineWidth=2;calib.forEach(p=>{x2.beginPath();x2.arc(p[0]*sc,p[1]*sc,6,0,7);x2.fill()});if(calib.length>1){x2.beginPath();x2.moveTo(calib[0][0]*sc,calib[0][1]*sc);x2.lineTo(calib[1][0]*sc,calib[1][1]*sc);x2.stroke()}}
+  x2.restore();
+}
+function drawItem2(it,ghost){
+  const dd=ITEMS[it.type],d=DPR();
+  x2.save();x2.translate(it.x*sc,it.y*sc);x2.rotate(it.rot*Math.PI/2);
+  x2.globalAlpha=ghost?0.5:1;
+  x2.fillStyle=it.type==='stair'?'#a1620755':(it.color||dd.col)+'cc';
+  x2.strokeStyle='#fbbf24';x2.lineWidth=1.5;
+  x2.fillRect(-dd.w/2*sc,-dd.l/2*sc,dd.w*sc,dd.l*sc);x2.strokeRect(-dd.w/2*sc,-dd.l/2*sc,dd.w*sc,dd.l*sc);
+  if(it.type==='stair'){
+    x2.strokeStyle='#fbbf24aa';x2.beginPath();
+    for(let k=1;k<15;k++){const z=dd.l/2-k*dd.l/15;x2.moveTo(-dd.w/2*sc,z*sc);x2.lineTo(dd.w/2*sc,z*sc)}
+    x2.stroke();x2.fillStyle='#fff';x2.beginPath();x2.moveTo(0,-dd.l/2*sc+2);x2.lineTo(-6*d,-dd.l/2*sc+14*d);x2.lineTo(6*d,-dd.l/2*sc+14*d);x2.fill();
+  }else{x2.rotate(-it.rot*Math.PI/2);x2.font=`${Math.min(18*d,sc*0.8)}px sans-serif`;x2.textAlign='center';x2.fillStyle='#fff';x2.fillText(dd.e,0,5*d)}
+  x2.restore();
+}
+function drawWalls(fl,col,lw,withOpen){
+  const d=DPR();x2.lineCap='butt';
+  fl.walls.forEach(w=>{x2.strokeStyle=col;x2.lineWidth=lw;x2.beginPath();x2.moveTo(w.x1*sc,w.y1*sc);x2.lineTo(w.x2*sc,w.y2*sc);x2.stroke();
+    if(withOpen){const L=Math.hypot(w.x2-w.x1,w.y2-w.y1);if(L>0.5){x2.fillStyle='#94a3b8';x2.font=`${10*d}px sans-serif`;x2.fillText(L.toFixed(1),(w.x1+w.x2)/2*sc+4,(w.y1+w.y2)/2*sc-6)}}});
+  if(!withOpen)return;
+  fl.open.forEach(o=>{
+    const n=nearestWall(o.x,o.y,fl);if(!n)return;const w=fl.walls[n.i];
+    const a=Math.atan2(w.y2-w.y1,w.x2-w.x1),hw=o.w/2;
+    x2.strokeStyle=o.type==='door'?'#f59e0b':'#38bdf8';x2.lineWidth=Math.max(6,WALL_T*sc*1.1);
+    x2.beginPath();x2.moveTo((n.px-Math.cos(a)*hw)*sc,(n.py-Math.sin(a)*hw)*sc);x2.lineTo((n.px+Math.cos(a)*hw)*sc,(n.py+Math.sin(a)*hw)*sc);x2.stroke();
+  });
+}
+const clampLand=(x,y)=>[Math.max(0,Math.min(S.land.w,x)),Math.max(0,Math.min(S.land.l,y))];
+const ptr=e=>{const t=e.touches?e.touches[0]||e.changedTouches[0]:e;return[t.clientX,t.clientY]};
+function down(e){
+  e.preventDefault();const[px,py]=ptr(e);const[rx,ry]=toW(px,py);let[x,y]=clampLand(snap(rx),snap(ry));
+  if(tool==='calib'){if(calib.length>=2)calib=[];calib.push([rx,ry]);if(calib.length===2)$('calRow').style.display='flex';draw2()}
+  else if(tool==='bgmove'&&bg){dragBg={dx:bg.x-rx,dy:bg.y-ry}}
+  else if(tool==='wall'){drag={x1:x,y1:y,x2:x,y2:y}}
+  else if(tool==='door'||tool==='window'){
+    const n=nearestWall(rx,ry);if(n){pushHist();F().open.push({x:n.px,y:n.py,type:tool,w:tool==='door'?0.9:1.2});commit()}
+  }else if(tool==='move'){
+    const i=hitItem(rx,ry);if(i>=0){pushHist();dragItem={i,dx:F().items[i].x-rx,dy:F().items[i].y-ry}}
+  }else if(tool.startsWith('item:')){
+    pushHist();F().items.push({type:tool.slice(5),x,y,rot:curRot,color:$('icol').value});commit();
+  }else if(tool==='erase'){
+    pushHist();
+    const oi=F().open.findIndex(o=>Math.hypot(o.x-rx,o.y-ry)<0.5);
+    const ii=hitItem(rx,ry);
+    if(oi>=0)F().open.splice(oi,1);
+    else if(ii>=0)F().items.splice(ii,1);
+    else{const n=nearestWall(rx,ry);if(n){F().open=F().open.filter(o=>{const m=nearestWall(o.x,o.y);return !(m&&m.i===n.i)});F().walls.splice(n.i,1);F().rooms=[]}}
+    commit();
+  }
+}
+function move(e){
+  if(e.target!==c2&&!drag&&!dragItem&&!dragBg)return;
+  const[px,py]=ptr(e);const[rx,ry]=toW(px,py);let x=snap(rx),y=snap(ry);[x,y]=clampLand(x,y);
+  if(dragBg){bg.x=rx+dragBg.dx;bg.y=ry+dragBg.dy;draw2();return}
+  if(drag){
+    if(Math.abs(x-drag.x1)<0.4)x=drag.x1;if(Math.abs(y-drag.y1)<0.4)y=drag.y1;
+    drag.x2=x;drag.y2=y;draw2();
+  }else if(dragItem){
+    const it=F().items[dragItem.i];[it.x,it.y]=clampLand(snap(rx+dragItem.dx),snap(ry+dragItem.dy));draw2();
+  }else if(tool==='door'||tool==='window'){hover=nearestWall(rx,ry);draw2()}
+  else if(tool.startsWith('item:')){hover={ghost:{type:tool.slice(5),x,y,rot:curRot,color:$('icol').value}};draw2()}
+}
+function up(){
+  dragBg=null;
+  if(drag){const L=Math.hypot(drag.x2-drag.x1,drag.y2-drag.y1);
+    if(L>=0.5){pushHist();F().walls.push({...drag});F().rooms=[];commit()}
+    drag=null;draw2()}
+  if(dragItem){dragItem=null;commit()}
+}
+c2.addEventListener('pointerdown',down);addEventListener('pointermove',move);addEventListener('pointerup',up);
+
+/* ================= 3D ================= */
+const c3=$('c3d');
+const renderer=new THREE.WebGLRenderer({canvas:c3,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
+renderer.shadowMap.enabled=true;
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x9ec9ff);
+const cam=new THREE.PerspectiveCamera(55,1,0.1,500);
+const ctl=new OrbitControls(cam,c3);ctl.enableDamping=true;
+const sun=new THREE.DirectionalLight(0xffffff,2.2);sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+const hemi=new THREE.HemisphereLight(0xffffff,0x446644,1.0);
+scene.add(sun,hemi);
+const house=new THREE.Group();scene.add(house);
+const M={
+  wall:new THREE.MeshStandardMaterial({color:0xf1ebe0,roughness:.9}),
+  slab:new THREE.MeshStandardMaterial({color:0xb8b0a2,roughness:.95}),
+  glass:new THREE.MeshStandardMaterial({color:0x7dd3fc,transparent:true,opacity:.35,roughness:.1,metalness:.3}),
+  door:new THREE.MeshStandardMaterial({color:0x7c4a1e,roughness:.7}),
+  ground:new THREE.MeshStandardMaterial({color:0x4d8a3f,roughness:1}),
+  roof:new THREE.MeshStandardMaterial({color:0xcfc7b8,roughness:.9})
+};
+let ground,landEdge;
+function box(len,h,t,mat,cx,cy,cz,ang,parent=house){
+  const m=new THREE.Mesh(new THREE.BoxGeometry(len,h,t),mat);m.position.set(cx,cy,cz);m.rotation.y=ang;m.castShadow=m.receiveShadow=true;parent.add(m);return m;
+}
+function slab(b,holes,mat,topY){
+  const x0=b.x0-WALL_T/2,x1=b.x1+WALL_T/2,z0=b.y0-WALL_T/2,z1=b.y1+WALL_T/2;
+  if(x1-x0<0.3||z1-z0<0.3)return;
+  const sh=new THREE.Shape();sh.moveTo(x0,z0);sh.lineTo(x1,z0);sh.lineTo(x1,z1);sh.lineTo(x0,z1);sh.closePath();
+  holes.forEach(h=>{const p=new THREE.Path();p.moveTo(h.x0,h.y0);p.lineTo(h.x0,h.y1);p.lineTo(h.x1,h.y1);p.lineTo(h.x1,h.y0);p.closePath();sh.holes.push(p)});
+  const g=new THREE.ExtrudeGeometry(sh,{depth:SL,bevelEnabled:false});g.rotateX(Math.PI/2);
+  const m=new THREE.Mesh(g,mat);m.position.y=topY;m.castShadow=m.receiveShadow=true;house.add(m);
+}
+function stairHole(it){const[w,l]=dimsOf(it);return{x0:it.x-w/2,x1:it.x+w/2,y0:it.y-l/2,y1:it.y+l/2}}
+function addItem3(it,y0){
+  const g=new THREE.Group();g.position.set(it.x,y0,it.y);g.rotation.y=-it.rot*Math.PI/2;house.add(g);
+  const d=ITEMS[it.type];
+  if(it.type==='stair'){
+    const N=15,rise=(S.h+SL)/N,run=d.l/N,mat=new THREE.MeshStandardMaterial({color:new THREE.Color(it.color||'#a16207'),roughness:.8});
+    for(let k=0;k<N;k++){const h=(k+1)*rise;box(d.w,h,run,mat,0,h/2,d.l/2-(k+.5)*run,0,g)}
+    return;
+  }
+  const base=new THREE.MeshStandardMaterial({color:new THREE.Color(it.color||d.col),roughness:.8});
+  d.parts.forEach(p=>{
+    const mat=p[6]!==undefined?new THREE.MeshStandardMaterial({color:p[6],roughness:.8}):base;
+    box(p[3],p[4],p[5],mat,p[0],p[1],p[2],0,g);
+  });
+}
+function build3D(){
+  house.traverse(o=>{if(o.geometry)o.geometry.dispose()});
+  while(house.children.length)house.remove(house.children[0]);
+  M.wall.color.set(S.wc);M.slab.color.set(S.fc);
+  const H=S.h;
+  S.floors.forEach((fl,fi)=>{
+    const y0=fi*(H+SL),b=bb(fl);
+    if(b){
+      const holes=fi>0?S.floors[fi-1].items.filter(i=>i.type==='stair').map(stairHole):[];
+      slab(b,holes,M.slab,y0);
+      if(fi===S.floors.length-1)slab(b,[],M.roof,y0+H+SL);
+    }
+    fl.walls.forEach((w,wi)=>{
+      const dx=w.x2-w.x1,dz=w.y2-w.y1,L=Math.hypot(dx,dz);if(L<0.01)return;
+      const ang=-Math.atan2(dz,dx),ux=dx/L,uz=dz/L;
+      const ops=[];
+      fl.open.forEach(o=>{const n=nearestWall(o.x,o.y,fl);if(n&&n.i===wi)ops.push({c:n.t*L,w:o.w,type:o.type})});
+      ops.sort((a,b)=>a.c-b.c);
+      const place=(a,b,ya,yb,mat)=>{if(b-a<0.01||yb-ya<0.01)return;const m=(a+b)/2;
+        box(b-a,yb-ya,mat===M.glass?0.04:WALL_T,mat,w.x1+ux*m,y0+(ya+yb)/2,w.y1+uz*m,ang)};
+      let cur=0;
+      ops.forEach(o=>{
+        const a=Math.max(cur,o.c-o.w/2),b=Math.min(L,o.c+o.w/2);
+        place(cur,a,0,H,M.wall);
+        if(o.type==='door'){place(a,b,2.1,H,M.wall)}
+        else{place(a,b,0,0.9,M.wall);place(a,b,2.1,H,M.wall);place(a,b,0.9,2.1,M.glass)}
+        cur=Math.max(cur,b);
+      });
+      place(cur,L,0,H,M.wall);
+    });
+    fl.items.forEach(it=>addItem3(it,y0));
+  });
+  if(ground){scene.remove(ground);ground.geometry.dispose()}
+  const g=Math.max(S.land.w,S.land.l)*3;
+  ground=new THREE.Mesh(new THREE.PlaneGeometry(g,g),M.ground);ground.rotation.x=-Math.PI/2;ground.position.set(S.land.w/2,-0.21,S.land.l/2);ground.receiveShadow=true;scene.add(ground);
+  if(landEdge)scene.remove(landEdge);
+  const pts=[[0,0],[S.land.w,0],[S.land.w,S.land.l],[0,S.land.l],[0,0]].map(p=>new THREE.Vector3(p[0],-0.18,p[1]));
+  landEdge=new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:0xfacc15}));scene.add(landEdge);
+  sun.position.set(S.land.w/2+25,40,S.land.l/2-20);sun.target.position.set(S.land.w/2,0,S.land.l/2);scene.add(sun.target);
+  const s3=Math.max(S.land.w,S.land.l)*1.2;Object.assign(sun.shadow.camera,{left:-s3,right:s3,top:s3,bottom:-s3,near:1,far:150});sun.shadow.camera.updateProjectionMatrix();
+}
+let inside=false,night=false;
+function viewOut(){
+  inside=false;ctl.enableZoom=true;ctl.maxPolarAngle=Math.PI/2.05;
+  const cx=S.land.w/2,cz=S.land.l/2,d=Math.max(S.land.w,S.land.l)*1.4;
+  cam.position.set(cx+d*.7,d*.8,cz+d*.9);ctl.target.set(cx,S.h,cz);ctl.update();
+  $('vOut').classList.add('on');$('vIn').classList.remove('on');
+}
+function viewIn(){
+  inside=true;ctl.enableZoom=false;ctl.maxPolarAngle=Math.PI;
+  const b=bb(F());let cx=S.land.w/2,cz=S.land.l/2;
+  if(b){cx=(b.x0+b.x1)/2;cz=b.y1-1.2}
+  const y=S.cur*(S.h+SL)+1.6;
+  cam.position.set(cx,y,cz);ctl.target.set(cx,y,cz-0.5);ctl.update();
+  $('vIn').classList.add('on');$('vOut').classList.remove('on');
+}
+const keys={};addEventListener('keydown',e=>{keys[e.key]=true;if((e.key==='r'||e.key==='R')&&e.target.tagName!=='TEXTAREA'&&e.target.tagName!=='INPUT')rotate()});addEventListener('keyup',e=>keys[e.key]=false);
+$('vNight').onclick=()=>{night=!night;scene.background.set(night?0x0b1026:0x9ec9ff);sun.intensity=night?0.15:2.2;hemi.intensity=night?0.25:1.0};
+$('vOut').onclick=viewOut;$('vIn').onclick=viewIn;
+function resize3(){const r=c3.parentElement.getBoundingClientRect();renderer.setSize(r.width,r.height,false);cam.aspect=r.width/r.height;cam.updateProjectionMatrix()}
+function loop(){
+  requestAnimationFrame(loop);
+  if(inside){
+    const f=new THREE.Vector3();cam.getWorldDirection(f);f.y=0;f.normalize();const s=new THREE.Vector3().crossVectors(f,new THREE.Vector3(0,1,0));
+    const v=new THREE.Vector3();
+    if(keys.ArrowUp)v.add(f);if(keys.ArrowDown)v.sub(f);if(keys.ArrowRight)v.add(s);if(keys.ArrowLeft)v.sub(s);
+    if(v.lengthSq()){v.normalize().multiplyScalar(0.05);cam.position.add(v);ctl.target.add(v)}
+  }
+  ctl.update();renderer.render(scene,cam);
+}
+
+/* ================= التكلفة والكميات ================= */
+const PH=[['حفر وأساسات',.08],['خرسانة وحديد',.25],['بناء وجدران',.15],['كهرباء',.06],['سباكة',.06],['تبليط وزليج',.14],['صباغة',.06],['أبواب ونوافذ',.10],['تجهيزات وأخرى',.10]];
+const QN={3200:'اقتصادي',4200:'متوسط',5800:'فاخر'};
+const nf=n=>Math.round(n).toLocaleString('fr-FR');
+function quant(){
+  let area=0,wallNet=0,wl=0,one=0;
+  S.floors.forEach(fl=>{
+    const b=bb(fl);if(!b)return;const a=(b.x1-b.x0)*(b.y1-b.y0);area+=a;one=Math.max(one,a);
+    fl.walls.forEach(w=>{const L=Math.hypot(w.x2-w.x1,w.y2-w.y1);wl+=L;wallNet+=L*S.h});
+    fl.open.forEach(o=>{wallNet-=o.type==='door'?o.w*2.1:o.w*1.2});
+  });
+  wallNet=Math.max(0,wallNet);
+  const P=S.P,beton=area*P.beton,acier=beton*100/1000,ciment=beton*0.35+wallNet*0.025,sable=beton*0.45+wallNet*0.04,gravier=beton*0.8,brique=wallNet*25;
+  return{area,one,wallNet,wl,beton,acier,ciment,sable,gravier,brique};
+}
+function stats(){
+  const q=quant(),land=S.land.w*S.land.l,price=+$('qual').value*S.P.city,total=q.area*price;
+  $('stats').innerHTML=`الأرض: <b>${land}</b> م² · مبني/طابق: <b>${q.one.toFixed(0)}</b> م²<br>مساحة مبنية إجمالية: <b>${q.area.toFixed(0)}</b> م² · جدران: <b>${q.wl.toFixed(0)}</b> م.ط<br>المتبقي من الأرض: <b>${Math.max(0,land-q.one).toFixed(0)}</b> م²<br>💰 تقدير: <b>${nf(total)}</b> درهم`;
+}
+function costOverlay(){
+  const q=quant(),P=S.P,sel=+$('qual').value,total=q.area*sel*P.city;
+  const mat=[['إسمنت',q.ciment,'طن',P.ciment,'ciment'],['حديد',q.acier,'طن',P.acier,'acier'],['رمل',q.sable,'م³',P.sable,'sable'],['حصى',q.gravier,'م³',P.gravier,'gravier'],['آجور',q.brique,'قطعة',P.brique,'brique']];
+  let matTot=0;
+  const matRows=mat.map(m=>{const c=m[1]*m[3];matTot+=c;return`<tr><td>${m[0]}</td><td class="n">${m[1]<100?m[1].toFixed(1):nf(m[1])} ${m[2]}</td><td class="n"><input type="number" data-p="${m[4]}" value="${m[3]}" step="any" style="width:80px"> د/${m[2]}</td><td class="n">${nf(c)}</td></tr>`}).join('');
+  const ph=PH.map(p=>`<tr><td>${p[0]}</td><td class="n">${(p[1]*100).toFixed(0)}%</td><td class="n">${nf(total*p[1])}</td></tr>`).join('');
+  const cmp=[3200,4200,5800].map(p=>{const t=q.area*p*P.city;return`<tr${p===sel?' style="color:var(--acc)"':''}><td>${QN[p]}</td><td class="n">${nf(p*P.city)} د/م²</td><td class="n">${nf(t)}</td><td class="n">${t>=total?'+':''}${nf(t-total)}</td></tr>`}).join('');
+  let bud='';
+  if(S.budget){const diff=S.budget-total;bud=`<h2>الميزانية</h2><div>ميزانيتك: <b>${nf(S.budget)}</b> د · التقدير الحالي: <b>${nf(total)}</b> د → <b class="${diff>=0?'ok':'ko'}">${diff>=0?'كاين فائض '+nf(diff):'كاين عجز '+nf(-diff)} درهم</b></div>`}
+  $('ovBody').innerHTML=`<h2>📊 ملخص (${QN[sel]})</h2>
+  <div>مساحة مبنية إجمالية <b>${q.area.toFixed(0)} م²</b> · خرسانة ≈ <b>${q.beton.toFixed(0)} م³</b> · مساحة الجدران الصافية <b>${q.wallNet.toFixed(0)} م²</b></div>
+  ${bud}
+  <h2>التكلفة حسب المراحل</h2><table><tr><th>المرحلة</th><th class="n">النسبة</th><th class="n">درهم</th></tr>${ph}<tr><th>المجموع</th><th></th><th class="n">${nf(total)}</th></tr></table>
+  <h2>كميات المواد (هيكل + جدران)</h2><table><tr><th>المادة</th><th class="n">الكمية</th><th class="n">الثمن</th><th class="n">درهم</th></tr>${matRows}<tr><th>مجموع المواد الخام</th><th></th><th></th><th class="n">${nf(matTot)}</th></tr></table>
+  <div class="warn" style="max-width:none;margin-top:4px">الأثمان قابلة للتعديل حسب مدينتك (سيتم تحديثها لاحقاً من الموردين). مجموع المواد الخام جزء من الميزانية الكلية، ماشي مضاف عليها.</div>
+  <h2>مقارنة جودة المواد</h2><table><tr><th>الجودة</th><th class="n">الثمن/م²</th><th class="n">المجموع</th><th class="n">الفرق</th></tr>${cmp}</table>
+  <h2>معامل المدينة</h2><div class="row"><input type="number" data-p="city" value="${P.city}" step="0.01" min="0.5" max="2" style="width:80px"><span class="warn">1.00 = السعر المرجعي. عدّلو حسب مدينتك (مثلاً 1.05 إلى كانت المواد أغلى).</span></div>
+  <div class="warn" style="max-width:none;margin-top:10px">⚠️ التقدير تقريبي بنسب عامة (خرسانة 0.18 م³/م²، حديد 100 كغ/م³، آجور 25 قطعة/م² جدار). الأرقام الحقيقية كتجي من دراسة المهندس وجدول الكميات (BOQ).</div>`;
+  $('ovBody').querySelectorAll('input[data-p]').forEach(i=>i.onchange=()=>{S.P[i.dataset.p]=+i.value||defP[i.dataset.p];save();stats();costOverlay()});
+  $('ov').style.display='block';
+}
+$('costBtn').onclick=costOverlay;$('ovClose').onclick=()=>$('ov').style.display='none';
+
+/* ================= AI Architect (محلي، بدون إنترنت) ================= */
+const AR={'٠':0,'١':1,'٢':2,'٣':3,'٤':4,'٥':5,'٦':6,'٧':7,'٨':8,'٩':9};
+const WORDN=[[/واحد|وحدة|وحدا/,1],[/جوج|زوج|اثنين|إثنين|غرفتين|2/,2],[/تلاتة|تلات|ثلاثة|ثلاث/,3],[/ربعة|ربع|أربعة|اربعة|أربع/,4],[/خمسة|خمس|خمسا/,5]];
+function numWord(s){for(const[r,n] of WORDN)if(r.test(s))return n;return null}
+function parseBrief(t0){
+  const t=t0.replace(/[٠-٩]/g,c=>AR[c]).toLowerCase();
+  const o={};
+  let m=t.match(/(\d+(?:[.,]\d+)?)\s*(?:متر|م²|م2|م\b|m²|m2|m\b)/);if(m)o.area=parseFloat(m[1].replace(',','.'));
+  if(/طابقين|دوبلكس|duplex|deux\s+[ée]tages?|r\s*\+\s*1\b/.test(t))o.floors=2;
+  if(/ثلاث(?:ة)?\s*طوابق|تلات\s*طوابق|r\s*\+\s*2\b/.test(t))o.floors=3;
+  m=t.match(/(\d)\s*(?:طوابق|[ée]tages?)/);if(m)o.floors=Math.min(4,+m[1]);
+  m=t.match(/r\s*\+\s*(\d)/);if(m)o.floors=Math.min(4,+m[1]+1);
+  if(/طابق\s*واحد|طابق\s*وحيد|plain[\s-]?pied|rdc\b|r\s*\+\s*0/.test(t))o.floors=1;
+  m=t.match(/(\d+)\s*(?:غرف|غرفة|bedrooms?|chambres?)/);
+  if(m)o.beds=+m[1];
+  else{m=t.match(/(واحد|وحدة|جوج|زوج|اثنين|تلاتة|ثلاثة|ربعة|أربعة|خمسة)\s*(?:د\s*)?(?:ال)?غرف/);if(m)o.beds=numWord(m[1]);if(/غرفتين/.test(t))o.beds=2}
+  if(/مرآب|مراب|كراج|garage|موقف/.test(t))o.garage=/سيارتين|جوج\s*(?:د\s*)?(?:ال)?سيارات|2\s*(?:سيارات|voitures)/.test(t)?2:1;
+  m=t.match(/(\d+(?:[.,]\d+)?)\s*(ألف|الف|مليون|ملايين|k|million)?\s*(?:درهم|dh|mad|dirhams?)/);
+  if(m){let v=parseFloat(m[1].replace(',','.'));const u=m[2];if(u&&/مليون|ملايين|million/.test(u))v*=1e6;else if(u&&/ألف|الف|k/.test(u))v*=1e3;else if(v<10000)v*=1e3;o.budget=v}
+  return o;
+}
+function genPlan(o){
+  const mg=0.5,X0=mg,Y0=mg,X1=o.W-mg,Y1=o.L-mg,W=X1-X0,D=Y1-Y0,nF=o.floors,hw=nF>1?1.6:0;
+  const backD=Math.min(Math.max(D*0.45,nF>1?4.5:0),D-2.5),yMid=Y0+backD;
+  const floors=[];let rem=o.beds;
+  for(let fi=0;fi<nF;fi++){
+    const front=[],back=[];
+    if(fi===0){
+      if(o.garage)front.push('garage');front.push('salon');back.push('kitchen','bath');
+      if(nF===1){for(let i=0;i<o.beds;i++)(i%2===0?back:front).push('bed')}
+      if(o.swap)back.reverse();
+    }else{
+      const k=Math.ceil(rem/(nF-fi));rem-=k;
+      for(let i=0;i<k;i++)(i%2===0?front:back).push('bed');
+      back.push('bath');if(back.length===1)back.unshift('lounge');
+      if(!front.length)front.push('lounge');
+    }
+    const rooms=[],fl=newFloor();
+    const lay=(list,ya,yb,xa,xb)=>{
+      const gw=o.garage===2?5.5:3;let fixed=0,wsum=0;
+      const wt=k=>k==='garage'?0:k==='salon'?3*o.salonScale:k==='kitchen'?2:k==='bath'?1.3:k==='lounge'?2.5:2.2;
+      list.forEach(k=>{if(k==='garage')fixed+=gw;else wsum+=wt(k)});
+      let x=xa;list.forEach(k=>{const w=k==='garage'?gw:(xb-xa-fixed)*wt(k)/wsum;rooms.push({k,x0:x,x1:x+w,y0:ya,y1:yb,strip:ya===Y0?'b':'f'});x+=w});
+    };
+    lay(front,yMid,Y1,X0,X1);
+    if(hw){lay(back,Y0,yMid,X0,X1-hw);rooms.push({k:'hall',x0:X1-hw,x1:X1,y0:Y0,y1:yMid,strip:'b'})}else lay(back,Y0,yMid,X0,X1);
+    const Wl=(a,b,c,d)=>fl.walls.push({x1:a,y1:b,x2:c,y2:d});
+    Wl(X0,Y0,X1,Y0);Wl(X1,Y0,X1,Y1);Wl(X1,Y1,X0,Y1);Wl(X0,Y1,X0,Y0);Wl(X0,yMid,X1,yMid);
+    ['f','b'].forEach(s=>{const rs=rooms.filter(r=>r.strip===s);rs.slice(0,-1).forEach(r=>{Wl(r.x1,r.y0,r.x1,r.y1);fl.open.push({x:r.x1,y:(r.y0+r.y1)/2,type:'door',w:0.9})})});
+    // أبواب الحاجز الأفقي
+    const dx=[];rooms.filter(r=>r.k!=='garage').forEach(r=>{const c=(r.x0+r.x1)/2;if(!dx.some(v=>Math.abs(v-c)<1.1))dx.push(c)});
+    dx.forEach(c=>fl.open.push({x:c,y:yMid,type:'door',w:0.9}));
+    // نوافذ وأبواب خارجية
+    rooms.forEach(r=>{
+      const c=(r.x0+r.x1)/2,ww=r.k==='bath'?0.8:1.2;
+      if(r.strip==='f'){
+        if(r.k==='garage')fl.open.push({x:c,y:Y1,type:'door',w:2.4});
+        else if(r.k==='salon'&&fi===0){fl.open.push({x:r.x0+1.0,y:Y1,type:'door',w:1.0},{x:r.x1-1.6,y:Y1,type:'window',w:1.6})}
+        else fl.open.push({x:c,y:Y1,type:'window',w:ww});
+      }else fl.open.push({x:c,y:Y0,type:'window',w:r.k==='hall'?0.8:ww});
+    });
+    ['f','b'].forEach(s=>{const rs=rooms.filter(r=>r.strip===s);if(!rs.length)return;
+      const f0=rs[0],l0=rs[rs.length-1],ym=(f0.y0+f0.y1)/2;
+      if(f0.k!=='garage')fl.open.push({x:X0,y:ym,type:'window',w:1.2});
+      fl.open.push({x:X1,y:ym,type:'window',w:1.2})});
+    // أثاث
+    const put=(r,type,x,y,rot,color)=>{const it={type,x,y,rot,color:color||ITEMS[type].col},[w,l]=dimsOf(it);
+      if(x-w/2>=r.x0+0.08&&x+w/2<=r.x1-0.08&&y-l/2>=r.y0+0.08&&y+l/2<=r.y1-0.08)fl.items.push(it)};
+    rooms.forEach(r=>{
+      const cx=(r.x0+r.x1)/2,cy=(r.y0+r.y1)/2;
+      if(r.k==='salon'||r.k==='lounge'){put(r,'sofa',cx,r.y0+0.7,0);put(r,'table',cx,cy+0.4,0);put(r,'sofa',cx,r.y1-0.7,2,'#6b4a2f')}
+      if(r.k==='bed'){put(r,'bed',cx,r.y0+1.1,0);put(r,'wardrobe',r.x1-0.45,r.y1-1.1,1)}
+      if(r.k==='kitchen'){put(r,'kitchen',cx,r.y0+0.45,0);put(r,'table',cx,r.y1-0.8,0)}
+      if(r.k==='bath'){if(r.x1-r.x0>=1.9)put(r,'bath',cx,r.y0+0.5,0);else put(r,'bath',r.x0+0.5,cy,1)}
+      if(r.k==='hall'&&fi<nF-1){const l=ITEMS.stair.l;fl.items.push({type:'stair',x:cx,y:Y0+0.1+l/2,rot:0,color:'#a16207'})}
+    });
+    fl.rooms=rooms.map(r=>({k:r.k,x0:r.x0,x1:r.x1,y0:r.y0,y1:r.y1}));
+    floors.push(fl);
+  }
+  return floors;
+}
+function aiRun(){
+  const txt=$('aiTxt').value.trim();if(!txt)return;
+  let a=S.ai,msg=[];
+  const edit=(re,fn,m)=>{if(re.test(txt)){if(!a){$('aiMsg').textContent='ابدا بوصف المشروع أولاً، من بعد نقدر نعدلو.';return true}fn(a);msg.push(m);return true}return false};
+  let done=false;
+  done=edit(/(كبر|كبّر|وسع|وسّع)\s*(ال)?صالون/,a=>a.salonScale*=1.35,'تكبير الصالون')
+    ||edit(/(صغر|صغّر|نقص)\s*(ال)?صالون/,a=>a.salonScale/=1.35,'تصغير الصالون')
+    ||edit(/(بدل|غير|غيّر)\s*(مكان\s*)?(ال)?مطبخ/,a=>a.swap=!a.swap,'تبديل مكان المطبخ')
+    ||edit(/(زيد|زيدو|أضف)\s*(غرفة|غرف)/,a=>a.beds=Math.min(8,a.beds+1),'زيادة غرفة نوم')
+    ||edit(/(نقص|حيد|احذف)\s*(ال)?غرفة/,a=>a.beds=Math.max(1,a.beds-1),'نقصان غرفة نوم')
+    ||edit(/(زيد|زيدو|أضف)\s*طابق/,a=>a.floors=Math.min(4,a.floors+1),'زيادة طابق')
+    ||edit(/(زيد|زيدو|أضف)\s*(ال)?(مرآب|مراب|كراج)/,a=>a.garage=1,'إضافة مرآب')
+    ||edit(/(حيد|احذف)\s*(ال)?(مرآب|مراب|كراج)/,a=>a.garage=0,'حذف المرآب');
+  if(!done){
+    const p=parseBrief(txt);
+    a={W:S.land.w,L:S.land.l,floors:p.floors||1,beds:p.beds||3,garage:p.garage||0,salonScale:1,swap:false,budget:p.budget||0};
+    if(p.area){const w=Math.round(Math.sqrt(p.area*5/6)*2)/2;a.W=w;a.L=Math.round(p.area/w*2)/2}
+    msg.push(`فهمت: أرض ${(a.W*a.L).toFixed(0)} م² · ${a.floors===1?'طابق واحد':a.floors+' طوابق (R+'+(a.floors-1)+')'} · ${a.beds} غرف نوم${a.garage?' · مرآب':''}${a.budget?' · ميزانية '+nf(a.budget)+' د':''}`);
+    if(!p.area)msg.push('(ما ذكرتيش المساحة، خديت الأرض الحالية)');
+  }
+  if(a.floors>1&&a.beds<1)a.beds=1;
+  if(S.ai&&!done){} S.ai=a;
+  if(a.budget)S.budget=a.budget;
+  pushHist();
+  S.land.w=a.W;S.land.l=a.L;$('lw').value=a.W;$('ll').value=a.L;
+  S.floors=genPlan(a);S.cur=0;
+  // اختيار الجودة حسب الميزانية
+  const q=quant(),opts=[5800,4200,3200];let pick=3200,fits=false;
+  if(S.budget)for(const p of opts){if(q.area*p*S.P.city<=S.budget){pick=p;fits=true;break}}
+  else pick=+$('qual').value;
+  $('qual').value=pick;
+  const tot=q.area*pick*S.P.city;
+  msg.push(`التقدير: ${nf(tot)} د (${QN[pick]})`+(S.budget?(fits?' ✅ داخل الميزانية':' ⚠️ كتفوت الميزانية حتى بأرخص جودة'):''));
+  $('aiMsg').innerHTML=msg.join('<br>');
+  fit2();commit();renderFloors();viewOut();
+}
+$('aiGo').onclick=aiRun;
+
+/* ================= واجهة ================= */
+function renderFloors(){
+  $('floors').innerHTML='';
+  S.floors.forEach((_,i)=>{const b=document.createElement('button');b.textContent=i===0?'RDC':'R+'+i;if(i===S.cur)b.className='on';b.onclick=()=>{S.cur=i;ui();if(inside)viewIn()};$('floors').appendChild(b)});
+  $('flTag').textContent=S.cur===0?'RDC':'R+'+S.cur;
+}
+function commit(){save();build3D();draw2();stats()}
+function ui(){renderFloors();draw2();stats();save()}
+function rotate(){curRot=(curRot+1)%4}
+$('rot').onclick=rotate;
+document.querySelectorAll('#tools button,#items button').forEach(b=>b.onclick=()=>{tool=b.dataset.t;document.querySelectorAll('#tools button,#items button').forEach(x=>x.classList.toggle('on',x===b));hover=null;draw2()});
+$('undo').onclick=()=>{if(hist.length){S.floors=JSON.parse(hist.pop());S.cur=Math.min(S.cur,S.floors.length-1);commit();renderFloors()}};
+$('clear').onclick=()=>{pushHist();S.floors[S.cur]=newFloor();commit()};
+$('addFloor').onclick=()=>{if(S.floors.length>=5)return;pushHist();const prev=F(),nf2=newFloor();nf2.walls=prev.walls.map(w=>({...w}));S.floors.push(nf2);S.cur=S.floors.length-1;commit();renderFloors()};
+$('delFloor').onclick=()=>{if(S.floors.length<=1)return;pushHist();S.floors.pop();S.cur=Math.min(S.cur,S.floors.length-1);commit();renderFloors()};
+$('hgt').onchange=e=>{S.h=Math.max(2.2,Math.min(4,+e.target.value||2.8));commit()};
+$('lw').onchange=$('ll').onchange=()=>{S.land.w=+$('lw').value||10;S.land.l=+$('ll').value||12;fit2();commit()};
+$('wcol').onchange=e=>{S.wc=e.target.value;commit()};$('fcol').onchange=e=>{S.fc=e.target.value;commit()};
+$('qual').onchange=stats;
+function dl(name,href){const a=document.createElement('a');a.href=href;a.download=name;document.body.appendChild(a);a.click();a.remove()}
+$('exPng3').onclick=()=>{renderer.render(scene,cam);dl('maison-3d.png',c3.toDataURL('image/png'))};
+$('exPng2').onclick=()=>{draw2();dl('plan-2d-'+(S.cur===0?'RDC':'R+'+S.cur)+'.png',c2.toDataURL('image/png'))};
+$('exJson').onclick=()=>{dl('my-house-3d.json',URL.createObjectURL(new Blob([JSON.stringify(S)],{type:'application/json'})))};
+$('imJson').onclick=()=>$('imFile').click();
+$('imFile').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const x=JSON.parse(t);if(!x.floors)throw 0;pushHist();S=Object.assign(S,x);S.P=Object.assign({},defP,S.P||{});S.floors.forEach(f=>{f.items=f.items||[];f.rooms=f.rooms||[]});S.cur=0;$('lw').value=S.land.w;$('ll').value=S.land.l;$('hgt').value=S.h;fit2();commit();renderFloors()}catch(_){$('aiMsg').textContent='ملف غير صالح'}})};
+$('exRep').onclick=()=>{
+  const plans=S.floors.map((_,i)=>{const k=S.cur;S.cur=i;draw2();const u=c2.toDataURL('image/png');S.cur=k;return`<h3>${i===0?'RDC':'R+'+i}</h3><img src="${u}" style="max-width:100%;border:1px solid #ccc">`}).join('');
+  draw2();renderer.render(scene,cam);const im3=c3.toDataURL('image/png');
+  costOverlay();let h=$('ovBody').innerHTML.replace(/<input[^>]*value="([^"]*)"[^>]*>/g,'$1');$('ov').style.display='none';
+  const doc=`<!DOCTYPE html><html lang="ar" dir="rtl"><meta charset="utf-8"><title>تقرير MY HOUSE 3D</title><style>body{font-family:Tahoma,sans-serif;max-width:800px;margin:20px auto;padding:0 12px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #ddd;padding:4px 8px;text-align:start}h2{color:#0f766e}</style><h1>🏠 MY HOUSE 3D – تقرير المشروع</h1><p>${new Date().toLocaleDateString('fr-FR')} · أرض ${S.land.w}×${S.land.l} م</p><h2>المنزل 3D</h2><img src="${im3}" style="max-width:100%"><h2>المخططات</h2>${plans}${h}<p><i>تقدير تقريبي، لا يعوض دراسة المهندس المعماري ولا رخصة البناء.</i></p></html>`;
+  dl('rapport-my-house-3d.html',URL.createObjectURL(new Blob([doc],{type:'text/html'})));
+};
+$('demo').onclick=()=>{$('aiTxt').value='أرض 120 متر مربع، منزل من طابقين، 3 غرف نوم، صالون، مطبخ ومرآب، الميزانية 650 ألف درهم';aiRun()};
+
+/* ================= استيراد مخطط 2D ================= */
+function setTool(t){tool=t;document.querySelectorAll('#tools button,#items button,#impPanel button').forEach(x=>x.classList.toggle('on',x.dataset.t===t||(t==='calib'&&x.id==='bgCal')||(t==='bgmove'&&x.id==='bgMove')));hover=null;draw2()}
+const impMsg=t=>$('impMsg').innerHTML=t;
+function mergePairs(segs,maxGap=0.45){
+  const H=[],V=[],O=[];
+  segs.forEach(s=>{
+    if(Math.abs(s.y1-s.y2)<0.03)H.push({a:s.y1/2+s.y2/2,b0:Math.min(s.x1,s.x2),b1:Math.max(s.x1,s.x2)});
+    else if(Math.abs(s.x1-s.x2)<0.03)V.push({a:s.x1/2+s.x2/2,b0:Math.min(s.y1,s.y2),b1:Math.max(s.y1,s.y2)});
+    else O.push(s);
+  });
+  const pair=L=>{const used=new Set(),out=[];
+    for(let i=0;i<L.length;i++)for(let j=i+1;j<L.length;j++){
+      if(used.has(i)||used.has(j))continue;
+      const A=L[i],B=L[j],d=Math.abs(A.a-B.a);if(d<0.04||d>maxGap)continue;
+      const lo=Math.max(A.b0,B.b0),hi=Math.min(A.b1,B.b1),ov=hi-lo;
+      if(ov>=0.3&&ov>=0.5*Math.min(A.b1-A.b0,B.b1-B.b0)){out.push({a:(A.a+B.a)/2,b0:lo,b1:hi});used.add(i);used.add(j)}
+    }
+    L.forEach((l,i)=>{if(!used.has(i))out.push(l)});return out};
+  const h=pair(H),v=pair(V);
+  // وصل الأطراف بالتقاطعات
+  const near=0.3;
+  h.forEach(a=>{[['b0'],['b1']].forEach(([k])=>{const vs=v.find(w=>Math.abs(w.a-a[k])<near&&a.a>=w.b0-near&&a.a<=w.b1+near);if(vs)a[k]=vs.a})});
+  v.forEach(a=>{[['b0'],['b1']].forEach(([k])=>{const hs=h.find(w=>Math.abs(w.a-a[k])<near&&a.a>=w.b0-near&&a.a<=w.b1+near);if(hs)a[k]=hs.a})});
+  return [...h.map(l=>({x1:l.b0,y1:l.a,x2:l.b1,y2:l.a})),...v.map(l=>({x1:l.a,y1:l.b0,x2:l.a,y2:l.b1})),...O];
+}
+function applyWalls(segs,note){
+  segs=segs.filter(s=>Math.hypot(s.x2-s.x1,s.y2-s.y1)>=0.4).slice(0,250);
+  if(!segs.length){impMsg('ما لقيت جدران. جرب تعاير الصورة أو استعمل مخطط بخطوط واضحة.');return}
+  pushHist();
+  const r2=v=>Math.round(v*100)/100;
+  const f=F();f.walls=segs.map(s=>({x1:r2(s.x1),y1:r2(s.y1),x2:r2(s.x2),y2:r2(s.y2)}));f.open=[];f.rooms=[];
+  let mx=0,my=0;f.walls.forEach(w=>{mx=Math.max(mx,w.x1,w.x2);my=Math.max(my,w.y1,w.y2)});
+  if(mx>S.land.w||my>S.land.l){S.land.w=Math.max(S.land.w,Math.ceil(mx+1));S.land.l=Math.max(S.land.l,Math.ceil(my+1));$('lw').value=S.land.w;$('ll').value=S.land.l;fit2()}
+  setTool('wall');commit();viewOut();
+  impMsg(`✅ تم استيراد <b>${f.walls.length}</b> جدار (${mx.toFixed(1)}×${my.toFixed(1)} م). ${note||''}<br>صحح بالأدوات: مسح، جدار، باب، نافذة.`);
+}
+function detectFromImage(){
+  if(!bg)return;
+  const im=bg.img,r=Math.min(1,1400/Math.max(im.width,im.height)),W=Math.round(im.width*r),H=Math.round(im.height*r);
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H;const cx=cv.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,W,H);cx.drawImage(im,0,0,W,H);
+  const d=cx.getImageData(0,0,W,H).data,dark=new Uint8Array(W*H);
+  for(let i=0;i<W*H;i++)dark[i]=(0.3*d[i*4]+0.59*d[i*4+1]+0.11*d[i*4+2])<120?1:0;
+  const pm=bg.s*(im.width/W),minLen=Math.max(4,Math.round(0.9/pm)),tol=Math.max(2,Math.round(0.15/pm)),maxTh=0.6/pm;
+  const scan=horiz=>{
+    const A=horiz?H:W,B=horiz?W:H,get=(a,b)=>horiz?dark[a*W+b]:dark[b*W+a];
+    let active=[],out=[];
+    for(let a=0;a<A;a++){
+      const runs=[];let b=0;
+      while(b<B){
+        if(!get(a,b)){b++;continue}
+        let s=b,e=b,gap=0;
+        while(b<B){if(get(a,b)){e=b;gap=0;b++}else{gap++;b++;if(gap>2)break}}
+        if(e-s+1>=minLen)runs.push([s,e]);
+      }
+      const next=[];
+      runs.forEach(rn=>{
+        const m=active.find(s=>!s.taken&&Math.abs(s.b0-rn[0])<=tol&&Math.abs(s.b1-rn[1])<=tol);
+        if(m){m.last=a;m.taken=true;m.n++;m.sb0+=rn[0];m.sb1+=rn[1];next.push(m)}
+        else next.push({a0:a,last:a,b0:rn[0],b1:rn[1],n:1,sb0:rn[0],sb1:rn[1],taken:true});
+      });
+      active.forEach(s=>{if(!next.includes(s))out.push(s)});
+      active=next;active.forEach(s=>s.taken=false);
+    }
+    active.forEach(s=>out.push(s));
+    return out.filter(s=>s.n<=maxTh).map(s=>({a:(s.a0+s.last)/2+0.5,b0:s.sb0/s.n,b1:s.sb1/s.n+1}));
+  };
+  const segs=[];
+  scan(true).forEach(s=>segs.push({x1:bg.x+s.b0*pm,y1:bg.y+s.a*pm,x2:bg.x+s.b1*pm,y2:bg.y+s.a*pm}));
+  scan(false).forEach(s=>segs.push({x1:bg.x+s.a*pm,y1:bg.y+s.b0*pm,x2:bg.x+s.a*pm,y2:bg.y+s.b1*pm}));
+  applyWalls(mergePairs(segs),'إلى المقاس غير صحيح، استعمل 📏 معايرة ثم عاود الكشف.');
+}
+function parseDXF(txt,name){
+  const L=txt.split(/\r?\n/),pr=[];for(let i=0;i+1<L.length;i+=2)pr.push([parseInt(L[i]),L[i+1].trim()]);
+  let ins=0;for(let i=0;i<pr.length;i++)if(pr[i][0]===9&&pr[i][1]==='$INSUNITS'&&pr[i+1])ins=parseInt(pr[i+1][1])||0;
+  const ents=[];let cur=null;
+  pr.forEach(([c,v])=>{if(c===0){cur={t:v,p:[]};ents.push(cur)}else if(cur)cur.p.push([c,v])});
+  const segs=[];let poly=null;
+  const push=(layer,x1,y1,x2,y2)=>segs.push({layer,x1,y1,x2,y2});
+  const flush=()=>{if(poly&&poly.v.length>1){for(let i=0;i<poly.v.length-1;i++)push(poly.layer,...poly.v[i],...poly.v[i+1]);if(poly.closed)push(poly.layer,...poly.v[poly.v.length-1],...poly.v[0])}poly=null};
+  ents.forEach(e=>{
+    const g=c=>{const f=e.p.find(q=>q[0]===c);return f?parseFloat(f[1]):NaN},layer=(e.p.find(q=>q[0]===8)||[0,''])[1];
+    if(e.t==='LINE')push(layer,g(10),g(20),g(11),g(21));
+    else if(e.t==='LWPOLYLINE'){const v=[];let x=null;e.p.forEach(([c,val])=>{if(c===10)x=parseFloat(val);else if(c===20&&x!==null){v.push([x,parseFloat(val)]);x=null}});poly={layer,v,closed:((g(70)||0)&1)===1};flush()}
+    else if(e.t==='POLYLINE'){flush();poly={layer,v:[],closed:((g(70)||0)&1)===1}}
+    else if(e.t==='VERTEX'&&poly)poly.v.push([g(10),g(20)]);
+    else if(e.t==='SEQEND')flush();
+  });flush();
+  let ok=segs.filter(s=>[s.x1,s.y1,s.x2,s.y2].every(Number.isFinite));
+  if(!ok.length){impMsg('ما لقيت خطوط فملف DXF (كنقرا LINE وPOLYLINE فقط).');return}
+  const wl=ok.filter(s=>/wall|mur|جدار/i.test(s.layer));let note='';
+  if(wl.length>=4){ok=wl;note=' (استعملت طبقة الجدران)'}
+  let x0=1e12,x1=-1e12,y0=1e12,y1=-1e12;ok.forEach(s=>{x0=Math.min(x0,s.x1,s.x2);x1=Math.max(x1,s.x1,s.x2);y0=Math.min(y0,s.y1,s.y2);y1=Math.max(y1,s.y1,s.y2)});
+  const ext=Math.max(x1-x0,y1-y0),UM={1:.0254,2:.3048,4:.001,5:.01,6:1};
+  let k=UM[ins];if(!k)k=ext>3000?0.001:ext>300?0.01:1;
+  const unit=k===.001?'مم':k===.01?'سم':k===1?'م':'أخرى';
+  const out=ok.map(s=>({x1:(s.x1-x0)*k+0.5,y1:(y1-s.y1)*k+0.5,x2:(s.x2-x0)*k+0.5,y2:(y1-s.y2)*k+0.5}));
+  applyWalls(mergePairs(out),`الوحدة المكتشفة: ${unit}${note}.`);
+}
+$('impBtn').onclick=()=>$('impFile').click();
+$('impFile').onchange=e=>{
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  if(/\.dxf$/i.test(f.name)){f.text().then(t=>parseDXF(t,f.name));return}
+  if(/\.pdf$/i.test(f.name)||f.type==='application/pdf'){loadPdf(f);return}
+  const url=URL.createObjectURL(f),img=new Image();
+  img.onload=()=>setBg(img);
+  img.onerror=()=>impMsg('ما قدرتش نقرا الصورة.');
+  img.src=url;
+};
+function setBg(img){
+  bg={img,x:0.5,y:0.5,s:(S.land.w*0.9)/img.width,op:0.6};calib=[];
+  $('bgOp').value=60;$('impPanel').style.display='flex';$('calRow').style.display='none';
+  draw2();impMsg('الصورة تحطات فالمخطط. 1) 📏 <b>معايرة</b>: كليكي على نقطتين بينهم مسافة معروفة وكتب المسافة. 2) 🧱 <b>كشف الجدران</b>.');
+}
+let pdfDoc=null;
+async function renderPdfPage(n){
+  const pg=await pdfDoc.getPage(n),v0=pg.getViewport({scale:1}),sc2=Math.min(3,2200/Math.max(v0.width,v0.height)),v=pg.getViewport({scale:sc2});
+  const cv=document.createElement('canvas');cv.width=Math.round(v.width);cv.height=Math.round(v.height);
+  const cx=cv.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,cv.width,cv.height);
+  await pg.render({canvasContext:cx,viewport:v}).promise;
+  const img=new Image();img.onload=()=>setBg(img);img.src=cv.toDataURL('image/png');
+}
+async function loadPdf(f){
+  impMsg('كنقرا PDF...');
+  try{
+    const lib=await import('./lib/pdf.min.mjs');
+    lib.GlobalWorkerOptions.workerSrc=new URL('./lib/pdf.worker.min.mjs',location.href).href;
+    pdfDoc=await lib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;
+    const sel=$('pdfPg');sel.innerHTML='';for(let i=1;i<=pdfDoc.numPages;i++)sel.add(new Option(i+' / '+pdfDoc.numPages,i));
+    $('impPanel').style.display='flex';$('pdfRow').style.display=pdfDoc.numPages>1?'flex':'none';
+    await renderPdfPage(1);
+  }catch(err){impMsg('ما قدرتش نقرا PDF: '+(err&&err.message||err)+'<br>جرب تحوّلو لصورة PNG ولا DXF.')}
+}
+$('pdfPg').onchange=e=>renderPdfPage(+e.target.value);
+$('bgCal').onclick=()=>{calib=[];$('calRow').style.display='none';setTool('calib');impMsg('كليكي على نقطة أولى ثم ثانية فالصورة (مثلاً طرفي جدار طولو معروف).')};
+$('bgMove').onclick=()=>setTool('bgmove');
+$('bgOp').oninput=e=>{if(bg){bg.op=e.target.value/100;draw2()}};
+$('calOk').onclick=()=>{
+  if(!bg||calib.length<2)return;const real=+$('calD').value,dist=Math.hypot(calib[1][0]-calib[0][0],calib[1][1]-calib[0][1]);
+  if(!(real>0)||dist<0.01)return;const f=real/dist,p=calib[0];
+  bg.x=p[0]-(p[0]-bg.x)*f;bg.y=p[1]-(p[1]-bg.y)*f;bg.s*=f;calib=[];$('calRow').style.display='none';setTool('wall');
+  impMsg(`✅ تمت المعايرة. حجم الصورة: ${(bg.img.width*bg.s).toFixed(1)}×${(bg.img.height*bg.s).toFixed(1)} م. دابا 🧱 كشف الجدران.`);
+};
+$('bgDet').onclick=detectFromImage;
+$('bgDel').onclick=()=>{bg=null;calib=[];$('impPanel').style.display='none';impMsg('');draw2()};
+addEventListener('resize',()=>{fit2();resize3()});
+$('lw').value=S.land.w;$('ll').value=S.land.l;$('hgt').value=S.h;$('wcol').value=S.wc;$('fcol').value=S.fc;
+fit2();resize3();build3D();renderFloors();stats();viewOut();loop();
+if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
