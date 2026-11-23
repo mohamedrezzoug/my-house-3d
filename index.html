@@ -50,7 +50,7 @@ td.n,th.n{text-align:end;font-variant-numeric:tabular-nums}
 </head>
 <body>
 <header>
-  <h1>🏠 MY HOUSE 3D</h1><small>منزلك قبل بنائه</small><button id="mini" class="big" style="margin-inline-start:auto;padding:4px 12px"></button>
+  <h1>🏠 MY HOUSE 3D</h1><small>منزلك قبل بنائه · نسخة 11</small><button id="mini" class="big" style="margin-inline-start:auto;padding:4px 12px"></button>
 </header>
 <div id="app">
   <div class="pane"><canvas id="c2d"></canvas><div class="tag">المخطط 2D – الطابق <span id="flTag">RDC</span></div>
@@ -85,6 +85,7 @@ td.n,th.n{text-align:end;font-variant-numeric:tabular-nums}
       <button data-t="move">✋ تحريك</button>
       <button data-t="erase">🗑️ مسح</button>
     </div>
+    <div class="row"><b style="font-size:11px;color:var(--mut)">الباب:</b><button id="dSw">↔️ يتحل: للداخل</button><button id="dHg">🔩 المفصلة: يسار</button><button data-t="flip">🔁 قلب باب موجود</button></div>
     <div class="row"><button id="undo">↩️ تراجع</button><button id="redo">↪️ إعادة</button><button id="clear">مسح الطابق</button><button id="demo">⚡ مثال</button></div>
   </div>
   <div class="grp" data-tab="draw"><b>🏠 الغرف – اختار النوع ثم اسحب مستطيل</b>
@@ -220,7 +221,7 @@ function hitItem(x,y,fl=F()){
 /* ================= 2D ================= */
 const c2=$('c2d'),x2=c2.getContext('2d');
 let sc=20,ox=0,oy=0,drag=null,hover=null,dragItem=null;
-let roomDrag=null,cand=null;
+let roomDrag=null,cand=null,dSw='in',dHg='L';
 let bg=null,calib=[],dragBg=null,panning=null,pinch=null,pinched=false,calibPend=null,cropDrag=null,cropRect=null;const ptrs=new Map();
 const DPR=()=>devicePixelRatio||1;
 function fit2(){
@@ -263,7 +264,7 @@ function draw2(){
   }
   if(roomDrag){const r=rect(roomDrag);x2.fillStyle=(RC[tool.slice(5)]||'#14b8a6')+'44';x2.fillRect(r.x0*sc,r.y0*sc,(r.x1-r.x0)*sc,(r.y1-r.y0)*sc);x2.strokeStyle='#14b8a6';x2.lineWidth=2;x2.strokeRect(r.x0*sc,r.y0*sc,(r.x1-r.x0)*sc,(r.y1-r.y0)*sc);x2.fillStyle='#fff';x2.fillText((r.x1-r.x0).toFixed(2)+' × '+(r.y1-r.y0).toFixed(2)+' = '+((r.x1-r.x0)*(r.y1-r.y0)).toFixed(1)+' م²',r.x0*sc+6,r.y0*sc+16*d)}
   if(cand){x2.save();x2.lineCap='butt';x2.strokeStyle='#fb923c';x2.lineWidth=Math.max(4,WALL_T*sc);cand.segs.forEach(w=>{x2.beginPath();x2.moveTo(w.x1*sc,w.y1*sc);x2.lineTo(w.x2*sc,w.y2*sc);x2.stroke()});cand.opens.forEach(o=>{x2.fillStyle=o.type==='door'?'#f59e0b':'#38bdf8';x2.beginPath();x2.arc(o.x*sc,o.y*sc,7,0,7);x2.fill()});x2.restore()}
-  if(hover&&(tool==='door'||tool==='window')){x2.fillStyle=tool==='door'?'#f59e0b':'#38bdf8';x2.beginPath();x2.arc(hover.px*sc,hover.py*sc,7,0,7);x2.fill()}
+  if(hover&&(tool==='door'||tool==='window')){x2.fillStyle=tool==='door'?'#f59e0b':'#38bdf8';x2.beginPath();x2.arc(hover.px*sc,hover.py*sc,7,0,7);x2.fill();if(tool==='door'&&hover.i!==undefined)doorSym({w:0.9,...doorDefaults(hover)},F().walls[hover.i],hover.px,hover.py,0.6)}
   if(hover&&hover.ghost){drawItem2(hover.ghost,true)}
   {const cr=cropDrag?{x:Math.min(cropDrag.x1,cropDrag.x2),y:Math.min(cropDrag.y1,cropDrag.y2),w:Math.abs(cropDrag.x2-cropDrag.x1),h:Math.abs(cropDrag.y2-cropDrag.y1)}:cropRect;if(cr){x2.save();x2.strokeStyle='#f59e0b';x2.lineWidth=2.5;x2.setLineDash([8,5]);x2.strokeRect(cr.x*sc,cr.y*sc,cr.w*sc,cr.h*sc);x2.restore()}}
   if(calib.length){x2.strokeStyle='#f43f5e';x2.fillStyle='#f43f5e';x2.lineWidth=2;calib.forEach(p=>{x2.beginPath();x2.arc(p[0]*sc,p[1]*sc,6,0,7);x2.fill()});if(calib.length>1){x2.beginPath();x2.moveTo(calib[0][0]*sc,calib[0][1]*sc);x2.lineTo(calib[1][0]*sc,calib[1][1]*sc);x2.stroke()}}
@@ -295,6 +296,19 @@ function drawItem2(it,ghost){
   }
   x2.restore();
 }
+function doorSym(o,w,px,py,al){
+  const L=Math.hypot(w.x2-w.x1,w.y2-w.y1)||1,ux=(w.x2-w.x1)/L,uy=(w.y2-w.y1)/L,sw=o.sw||1,hg=o.hg||1,hw=o.w/2;
+  const hx=(px-hg*ux*hw)*sc,hy=(py-hg*uy*hw)*sc,dx=hg*ux,dy=hg*uy,nx=-uy*sw,ny=ux*sw,r=o.w*sc;
+  x2.save();x2.globalAlpha=al;x2.strokeStyle='#f59e0b';x2.lineWidth=1.5;
+  x2.beginPath();x2.arc(hx,hy,r,Math.atan2(dy,dx),Math.atan2(ny,nx),(dx*ny-dy*nx)<0);x2.stroke();
+  x2.lineWidth=2.5;x2.beginPath();x2.moveTo(hx,hy);x2.lineTo(hx+nx*r,hy+ny*r);x2.stroke();
+  x2.fillStyle='#f59e0b';x2.beginPath();x2.arc(hx,hy,3.5,0,7);x2.fill();x2.restore();
+}
+function doorDefaults(n){
+  const wl=F().walls[n.i],L=Math.hypot(wl.x2-wl.x1,wl.y2-wl.y1)||1,nx=-(wl.y2-wl.y1)/L,ny=(wl.x2-wl.x1)/L,b=bb(F());
+  let side=1;if(b){const cx=(b.x0+b.x1)/2-n.px,cy=(b.y0+b.y1)/2-n.py;side=(nx*cx+ny*cy)>=0?1:-1}
+  return{sw:dSw==='in'?side:-side,hg:dHg==='L'?1:-1};
+}
 function drawWalls(fl,col,lw,withOpen){
   const d=DPR();x2.lineCap='butt';
   fl.walls.forEach(w=>{x2.strokeStyle=col;x2.lineWidth=lw;x2.beginPath();x2.moveTo(w.x1*sc,w.y1*sc);x2.lineTo(w.x2*sc,w.y2*sc);x2.stroke();
@@ -305,7 +319,7 @@ function drawWalls(fl,col,lw,withOpen){
     const a=Math.atan2(w.y2-w.y1,w.x2-w.x1),hw=o.w/2;
     x2.strokeStyle=o.type==='door'?'#f59e0b':'#38bdf8';x2.lineWidth=Math.max(6,WALL_T*sc*1.1);
     x2.beginPath();x2.moveTo((n.px-Math.cos(a)*hw)*sc,(n.py-Math.sin(a)*hw)*sc);x2.lineTo((n.px+Math.cos(a)*hw)*sc,(n.py+Math.sin(a)*hw)*sc);x2.stroke();
-    if(o.type==='door'){const hx=(n.px-Math.cos(a)*hw)*sc,hy=(n.py-Math.sin(a)*hw)*sc;x2.strokeStyle='#f59e0b';x2.lineWidth=1.5;x2.beginPath();x2.arc(hx,hy,o.w*sc,a,a+Math.PI/2);x2.stroke();x2.beginPath();x2.moveTo(hx,hy);x2.lineTo(hx+Math.cos(a+Math.PI/2)*o.w*sc,hy+Math.sin(a+Math.PI/2)*o.w*sc);x2.stroke()}
+    if(o.type==='door')doorSym(o,w,n.px,n.py,1);
   });
 }
 function zoomAt(cx,cy,f){const r=c2.getBoundingClientRect(),d=c2.width/r.width,mx=(cx-r.left)*d,my=(cy-r.top)*d,n=Math.max(3,Math.min(400,sc*f)),k=n/sc;ox=mx-(mx-ox)*k;oy=my-(my-oy)*k;sc=n;draw2()}
@@ -369,8 +383,13 @@ function down(e){
   else if(tool==='bgmove'&&bg){dragBg={dx:bg.x-rx,dy:bg.y-ry}}
   else if(tool==='wall'){[x,y]=mag(x,y);drag={x1:x,y1:y,x2:x,y2:y}}
   else if(tool.startsWith('room:')){[x,y]=mag(x,y);roomDrag={x1:x,y1:y,x2:x,y2:y}}
+  else if(tool==='flip'){
+    let bi=-1,bd=0.7;F().open.forEach((o,i)=>{const d=Math.hypot(o.x-rx,o.y-ry);if(o.type==='door'&&d<bd){bd=d;bi=i}});
+    if(bi>=0){pushHist();const o=F().open[bi],sw=o.sw||1,hg=o.hg||1;
+      if(sw===1&&hg===1){o.sw=-1;o.hg=1}else if(sw===-1&&hg===1){o.sw=-1;o.hg=-1}else if(sw===-1&&hg===-1){o.sw=1;o.hg=-1}else{o.sw=1;o.hg=1}commit()}
+  }
   else if(tool==='door'||tool==='window'){
-    const ow=tool==='door'?0.9:1.2,n=clampOpen(nearestWall(rx,ry),ow);if(n){pushHist();F().open.push({x:n.px,y:n.py,type:tool,w:ow});commit()}
+    const ow=tool==='door'?0.9:1.2,n=clampOpen(nearestWall(rx,ry),ow);if(n){pushHist();F().open.push({x:n.px,y:n.py,type:tool,w:ow,...(tool==='door'?doorDefaults(n):{})});commit()}
   }else if(tool==='move'){
     const i=hitItem(rx,ry);if(i>=0){pushHist();dragItem={i,dx:F().items[i].x-rx,dy:F().items[i].y-ry}}
   }else if(tool.startsWith('item:')){
@@ -545,7 +564,7 @@ function build3D(){
       const dx=w.x2-w.x1,dz=w.y2-w.y1,L=Math.hypot(dx,dz);if(L<0.01)return;
       const ang=-Math.atan2(dz,dx),ux=dx/L,uz=dz/L;
       const ops=[];
-      fl.open.forEach(o=>{const n=nearestWall(o.x,o.y,fl);if(n&&n.i===wi)ops.push({c:n.t*L,w:o.w,type:o.type})});
+      fl.open.forEach(o=>{const n=nearestWall(o.x,o.y,fl);if(n&&n.i===wi)ops.push({c:n.t*L,w:o.w,type:o.type,sw:o.sw,hg:o.hg})});
       ops.sort((a,b)=>a.c-b.c);
       const place=(a,b,ya,yb,mat)=>{if(b-a<0.01||yb-ya<0.01)return;const m=(a+b)/2;
         box(b-a,yb-ya,mat===M.glass?0.04:WALL_T,mat,w.x1+ux*m,y0+(ya+yb)/2,w.y1+uz*m,ang)};
@@ -555,7 +574,8 @@ function build3D(){
         place(cur,a,0,H,M.wall);
         if(o.type==='door'){place(a,b,2.1,H,M.wall);
           const gr=new THREE.Group();gr.position.set(w.x1+ux*a,y0,w.y1+uz*a);gr.rotation.y=ang;house.add(gr);
-          const ln=b-a-0.06,ph=-1.0,lf=box(ln,2.05,0.04,M.door,ln/2*Math.cos(ph)+0.03,1.025,-ln/2*Math.sin(ph),0,gr);lf.rotation.y=ph;
+          const sw=o.sw||1,hg=o.hg||1,ln=b-a-0.06,al=1.0,hx=hg===1?0.03:(b-a)-0.03,lf=box(ln,2.05,0.04,M.door,hx+hg*ln/2*Math.cos(al),1.025,sw*ln/2*Math.sin(al),0,gr);
+          lf.rotation.y=Math.atan2(-sw*Math.sin(al),hg*Math.cos(al));
           box(0.07,2.1,WALL_T+0.04,M.door,0.0,1.05,0,0,gr);box(0.07,2.1,WALL_T+0.04,M.door,b-a,1.05,0,0,gr)}
         else{place(a,b,0,0.9,M.wall);place(a,b,2.1,H,M.wall);place(a,b,0.9,2.1,M.glass)}
         cur=Math.max(cur,b);
@@ -796,6 +816,8 @@ $('roofVis').onclick=()=>{S.roof.vis=!S.roof.vis;syncRoofBtns();commit()};
 $('cutBtn').onclick=()=>{S.roof.cut=!S.roof.cut;syncRoofBtns();commit()};syncRoofBtns();
 addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&!['INPUT','TEXTAREA'].includes(e.target.tagName)){const k=e.key.toLowerCase();if(k==='z'&&!e.shiftKey){e.preventDefault();$('undo').click()}else if(k==='y'||(k==='z'&&e.shiftKey)){e.preventDefault();$('redo').click()}}});
 $('undo').onclick=()=>{if(hist.length){redo.push(JSON.stringify(S.floors));S.floors=JSON.parse(hist.pop());S.cur=Math.min(S.cur,S.floors.length-1);commit();renderFloors()}};
+$('dSw').onclick=()=>{dSw=dSw==='in'?'out':'in';$('dSw').textContent=dSw==='in'?'↔️ يتحل: للداخل':'↔️ يتحل: للخارج'};
+$('dHg').onclick=()=>{dHg=dHg==='L'?'R':'L';$('dHg').textContent=dHg==='L'?'🔩 المفصلة: يسار':'🔩 المفصلة: يمين'};
 $('redo').onclick=()=>{if(redo.length){hist.push(JSON.stringify(S.floors));S.floors=JSON.parse(redo.pop());S.cur=Math.min(S.cur,S.floors.length-1);commit();renderFloors()}};
 $('clear').onclick=()=>{pushHist();S.floors[S.cur]=newFloor();commit()};
 $('addFloor').onclick=()=>{if(S.floors.length>=5)return;pushHist();const prev=F(),nf2=newFloor();nf2.walls=prev.walls.map(w=>({...w}));S.floors.push(nf2);S.cur=S.floors.length-1;commit();renderFloors()};
