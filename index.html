@@ -50,7 +50,7 @@ td.n,th.n{text-align:end;font-variant-numeric:tabular-nums}
 </head>
 <body>
 <header>
-  <h1>🏠 MY HOUSE 3D</h1><small>منزلك قبل بنائه · نسخة 12</small><button id="mini" class="big" style="margin-inline-start:auto;padding:4px 12px"></button>
+  <h1>🏠 MY HOUSE 3D</h1><small>منزلك قبل بنائه · نسخة 13</small><button id="newBtn" style="margin-inline-start:auto;padding:4px 12px">📄 مشروع جديد</button><button id="mini" class="big" style="padding:4px 12px"></button>
 </header>
 <div id="app">
   <div class="pane"><canvas id="c2d"></canvas><div class="tag">المخطط 2D – الطابق <span id="flTag">RDC</span></div>
@@ -132,6 +132,7 @@ td.n,th.n{text-align:end;font-variant-numeric:tabular-nums}
   </div>
   <div class="grp" data-tab="out"><b>الحصيلة</b>
     <div class="stat" id="stats"></div>
+    <div class="row"><button id="restoreBtn">♻️ رجّع المشروع السابق</button></div>
     <div class="row"><button id="costBtn" class="big">📊 التكلفة والكميات بالتفصيل</button></div>
     <div class="row"><button id="exPng3">🖼️ صورة 3D</button><button id="exPng2">📐 صورة المخطط</button><button id="exRep">📄 تقرير</button><button id="exJson">💾 حفظ</button><button id="imJson">📂 فتح</button><input type="file" id="imFile" accept=".json" style="display:none"></div>
     <div class="warn">تقدير تقريبي ماشي دراسة. ما يعوضش المهندس ولا رخصة البناء ولا تصميم التهيئة.</div>
@@ -1033,6 +1034,26 @@ $('calOk').onclick=()=>{
 };
 $('bgDet').onclick=detectFromImage;
 $('bgDel').onclick=()=>{cand=null;$('candRow').style.display='none';cropRect=null;$('zImg').style.display='none';bg=null;calib=[];$('impPanel').style.display='none';impMsg('');draw2()};
+function afterLoad(){
+  S.P=Object.assign({},defP,S.P||{});S.roof=Object.assign({t:'terrace',deg:25,col:'#b4532a',vis:true,cut:false},S.roof||{});
+  S.floors.forEach(f=>{f.items=f.items||[];f.rooms=f.rooms||[]});S.cur=0;hist=[];redo=[];
+  $('lw').value=S.land.w;$('ll').value=S.land.l;$('hgt').value=S.h;$('wcol').value=S.wc;$('fcol').value=S.fc;
+  $('roofT').value=S.roof.t;$('roofD').value=S.roof.deg;$('roofC').value=S.roof.col;syncRoofBtns();
+  $('bgDel').onclick();fit2();commit();renderFloors();viewOut();
+}
+$('newBtn').onclick=()=>{
+  if(!confirm('بدء مشروع جديد؟\nالمشروع الحالي كيتحفظ كنسخة احتياطية، وتقدر ترجعو من تبويب 📊 الحصيلة (زر ♻️). وإلا بغيتي ملف، دير 💾 حفظ قبل.'))return;
+  try{localStorage.setItem(KEY+'.prev',JSON.stringify(S))}catch(e){}
+  S.land={w:10,l:12};S.floors=[newFloor()];S.h=2.8;S.ai=null;S.budget=0;S.roof={t:'terrace',deg:25,col:'#b4532a',vis:true,cut:false};
+  $('aiTxt').value='';$('aiMsg').textContent='';afterLoad();
+};
+$('restoreBtn').onclick=()=>{
+  let p=null;try{p=JSON.parse(localStorage.getItem(KEY+'.prev'))}catch(e){}
+  if(!p||!p.floors){alert('ما كاين حتى مشروع سابق محفوظ.');return}
+  if(!confirm('نرجّع المشروع السابق؟ المشروع الحالي غادي يتعوّض.'))return;
+  try{localStorage.setItem(KEY+'.prev',JSON.stringify(S))}catch(e){}
+  S=Object.assign(S,p);afterLoad();
+};
 addEventListener('resize',()=>{fit2();resize3()});
 $('lw').value=S.land.w;$('ll').value=S.land.l;$('hgt').value=S.h;$('wcol').value=S.wc;$('fcol').value=S.fc;
 fit2();resize3();build3D();renderFloors();stats();viewOut();loop();
