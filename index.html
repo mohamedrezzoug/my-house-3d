@@ -51,7 +51,10 @@ td.n,th.n{text-align:end;font-variant-numeric:tabular-nums}
   <h1>🏠 MY HOUSE 3D</h1><small>منزلك قبل بنائه – نموذج أولي</small>
 </header>
 <div id="app">
-  <div class="pane"><canvas id="c2d"></canvas><div class="tag">المخطط 2D – الطابق <span id="flTag">RDC</span></div></div>
+  <div class="pane"><canvas id="c2d"></canvas><div class="tag">المخطط 2D – الطابق <span id="flTag">RDC</span></div>
+    <div id="zm" style="position:absolute;top:8px;inset-inline-end:8px;display:flex;gap:4px;flex-wrap:wrap;max-width:60%;justify-content:flex-end">
+      <button id="zIn">➕</button><button id="zOut">➖</button><button id="zFit" title="كل الأرض">⊡ الأرض</button><button id="zImg" title="كل الصورة" style="display:none">🖼️ الصورة</button><button id="zPan" data-t="pan">🖐️ تحريك العرض</button>
+    </div></div>
   <div class="pane"><canvas id="c3d"></canvas><div class="tag">المنزل 3D</div></div>
 </div>
 <div id="bar">
@@ -177,7 +180,7 @@ function hitItem(x,y,fl=F()){
 /* ================= 2D ================= */
 const c2=$('c2d'),x2=c2.getContext('2d');
 let sc=20,ox=0,oy=0,drag=null,hover=null,dragItem=null;
-let bg=null,calib=[],dragBg=null;
+let bg=null,calib=[],dragBg=null,panning=null,pinch=null;const ptrs=new Map();
 const DPR=()=>devicePixelRatio||1;
 function fit2(){
   const r=c2.parentElement.getBoundingClientRect(),d=DPR();
@@ -247,10 +250,20 @@ function drawWalls(fl,col,lw,withOpen){
     x2.beginPath();x2.moveTo((n.px-Math.cos(a)*hw)*sc,(n.py-Math.sin(a)*hw)*sc);x2.lineTo((n.px+Math.cos(a)*hw)*sc,(n.py+Math.sin(a)*hw)*sc);x2.stroke();
   });
 }
+function zoomAt(cx,cy,f){const r=c2.getBoundingClientRect(),d=c2.width/r.width,mx=(cx-r.left)*d,my=(cy-r.top)*d,n=Math.max(3,Math.min(400,sc*f)),k=n/sc;ox=mx-(mx-ox)*k;oy=my-(my-oy)*k;sc=n;draw2()}
+function fitImage(){if(!bg)return;const w=bg.img.width*bg.s,h=bg.img.height*bg.s;sc=Math.min(c2.width/(w+1),c2.height/(h+1));ox=(c2.width-w*sc)/2-bg.x*sc;oy=(c2.height-h*sc)/2-bg.y*sc;draw2()}
+c2.addEventListener('wheel',e=>{e.preventDefault();zoomAt(e.clientX,e.clientY,e.deltaY<0?1.2:1/1.2)},{passive:false});
+c2.addEventListener('contextmenu',e=>e.preventDefault());
+const cc=()=>{const r=c2.getBoundingClientRect();return[r.left+r.width/2,r.top+r.height/2]};
+$('zIn').onclick=()=>zoomAt(...cc(),1.4);$('zOut').onclick=()=>zoomAt(...cc(),1/1.4);$('zFit').onclick=()=>fit2();$('zImg').onclick=fitImage;
+$('zPan').onclick=()=>setTool(tool==='pan'?'wall':'pan');
 const clampLand=(x,y)=>[Math.max(0,Math.min(S.land.w,x)),Math.max(0,Math.min(S.land.l,y))];
 const ptr=e=>{const t=e.touches?e.touches[0]||e.changedTouches[0]:e;return[t.clientX,t.clientY]};
 function down(e){
-  e.preventDefault();const[px,py]=ptr(e);const[rx,ry]=toW(px,py);let[x,y]=clampLand(snap(rx),snap(ry));
+  e.preventDefault();
+  ptrs.set(e.pointerId,[e.clientX,e.clientY]);
+  if(ptrs.size>=2){drag=null;dragItem=null;dragBg=null;panning=null;const a=[...ptrs.values()],r=c2.getBoundingClientRect(),d=c2.width/r.width,cx=((a[0][0]+a[1][0])/2-r.left)*d,cy=((a[0][1]+a[1][1])/2-r.top)*d;pinch={d:Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1]),sc:sc,w:[(cx-ox)/sc,(cy-oy)/sc]};return}
+  if(e.button===1||e.button===2||tool==='pan'||keys[' ']){panning={x:e.clientX,y:e.clientY};return}const[px,py]=ptr(e);const[rx,ry]=toW(px,py);let[x,y]=clampLand(snap(rx),snap(ry));
   if(tool==='calib'){if(calib.length>=2)calib=[];calib.push([rx,ry]);if(calib.length===2)$('calRow').style.display='flex';draw2()}
   else if(tool==='bgmove'&&bg){dragBg={dx:bg.x-rx,dy:bg.y-ry}}
   else if(tool==='wall'){drag={x1:x,y1:y,x2:x,y2:y}}
@@ -271,6 +284,10 @@ function down(e){
   }
 }
 function move(e){
+  if(ptrs.has(e.pointerId))ptrs.set(e.pointerId,[e.clientX,e.clientY]);
+  if(pinch&&ptrs.size>=2){const a=[...ptrs.values()],r=c2.getBoundingClientRect(),d=c2.width/r.width,dist=Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1]),cx=((a[0][0]+a[1][0])/2-r.left)*d,cy=((a[0][1]+a[1][1])/2-r.top)*d;
+    sc=Math.max(3,Math.min(400,pinch.sc*dist/pinch.d));ox=cx-pinch.w[0]*sc;oy=cy-pinch.w[1]*sc;draw2();return}
+  if(panning){const r=c2.getBoundingClientRect(),d=c2.width/r.width;ox+=(e.clientX-panning.x)*d;oy+=(e.clientY-panning.y)*d;panning={x:e.clientX,y:e.clientY};draw2();return}
   if(e.target!==c2&&!drag&&!dragItem&&!dragBg)return;
   const[px,py]=ptr(e);const[rx,ry]=toW(px,py);let x=snap(rx),y=snap(ry);[x,y]=clampLand(x,y);
   if(dragBg){bg.x=rx+dragBg.dx;bg.y=ry+dragBg.dy;draw2();return}
@@ -282,14 +299,15 @@ function move(e){
   }else if(tool==='door'||tool==='window'){hover=nearestWall(rx,ry);draw2()}
   else if(tool.startsWith('item:')){hover={ghost:{type:tool.slice(5),x,y,rot:curRot,color:$('icol').value}};draw2()}
 }
-function up(){
-  dragBg=null;
+function up(e){
+  if(e&&e.pointerId!==undefined)ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;
+  panning=null;dragBg=null;
   if(drag){const L=Math.hypot(drag.x2-drag.x1,drag.y2-drag.y1);
     if(L>=0.5){pushHist();F().walls.push({...drag});F().rooms=[];commit()}
     drag=null;draw2()}
   if(dragItem){dragItem=null;commit()}
 }
-c2.addEventListener('pointerdown',down);addEventListener('pointermove',move);addEventListener('pointerup',up);
+c2.addEventListener('pointerdown',down);addEventListener('pointermove',move);addEventListener('pointerup',up);addEventListener('pointercancel',up);
 
 /* ================= 3D ================= */
 const c3=$('c3d');
@@ -606,7 +624,7 @@ $('exRep').onclick=()=>{
 $('demo').onclick=()=>{$('aiTxt').value='أرض 120 متر مربع، منزل من طابقين، 3 غرف نوم، صالون، مطبخ ومرآب، الميزانية 650 ألف درهم';aiRun()};
 
 /* ================= استيراد مخطط 2D ================= */
-function setTool(t){tool=t;document.querySelectorAll('#tools button,#items button,#impPanel button').forEach(x=>x.classList.toggle('on',x.dataset.t===t||(t==='calib'&&x.id==='bgCal')||(t==='bgmove'&&x.id==='bgMove')));hover=null;draw2()}
+function setTool(t){tool=t;document.querySelectorAll('#tools button,#items button,#impPanel button,#zPan').forEach(x=>x.classList.toggle('on',x.dataset.t===t||(t==='calib'&&x.id==='bgCal')||(t==='bgmove'&&x.id==='bgMove')));hover=null;draw2()}
 const impMsg=t=>$('impMsg').innerHTML=t;
 function mergePairs(segs,maxGap=0.45){
   const H=[],V=[],O=[];
@@ -714,9 +732,9 @@ $('impFile').onchange=e=>{
   img.src=url;
 };
 function setBg(img){
-  bg={img,x:0.5,y:0.5,s:(S.land.w*0.9)/img.width,op:0.6};calib=[];
+  bg={img,x:0.5,y:0.5,s:(S.land.w*0.9)/img.width,op:0.6};calib=[];$('zImg').style.display='';
   $('bgOp').value=60;$('impPanel').style.display='flex';$('calRow').style.display='none';
-  draw2();impMsg('الصورة تحطات فالمخطط. 1) 📏 <b>معايرة</b>: كليكي على نقطتين بينهم مسافة معروفة وكتب المسافة. 2) 🧱 <b>كشف الجدران</b>.');
+  fitImage();impMsg('الصورة تحطات فالمخطط. 1) 📏 <b>معايرة</b>: كليكي على نقطتين بينهم مسافة معروفة وكتب المسافة. 2) 🧱 <b>كشف الجدران</b>.');
 }
 let pdfDoc=null;
 async function renderPdfPage(n){
@@ -738,7 +756,7 @@ async function loadPdf(f){
   }catch(err){impMsg('ما قدرتش نقرا PDF: '+(err&&err.message||err)+'<br>جرب تحوّلو لصورة PNG ولا DXF.')}
 }
 $('pdfPg').onchange=e=>renderPdfPage(+e.target.value);
-$('bgCal').onclick=()=>{calib=[];$('calRow').style.display='none';setTool('calib');impMsg('كليكي على نقطة أولى ثم ثانية فالصورة (مثلاً طرفي جدار طولو معروف).')};
+$('bgCal').onclick=()=>{calib=[];$('calRow').style.display='none';setTool('calib');impMsg('كبّر الصورة (عجلة الفأرة، أو ➕، أو قرص بإصبعين)، وكليكي على نقطة أولى ثم ثانية (مثلاً طرفي جدار طولو معروف). التحريك: 🖐️ أو كليك يمين أو Space.')};
 $('bgMove').onclick=()=>setTool('bgmove');
 $('bgOp').oninput=e=>{if(bg){bg.op=e.target.value/100;draw2()}};
 $('calOk').onclick=()=>{
@@ -748,7 +766,7 @@ $('calOk').onclick=()=>{
   impMsg(`✅ تمت المعايرة. حجم الصورة: ${(bg.img.width*bg.s).toFixed(1)}×${(bg.img.height*bg.s).toFixed(1)} م. دابا 🧱 كشف الجدران.`);
 };
 $('bgDet').onclick=detectFromImage;
-$('bgDel').onclick=()=>{bg=null;calib=[];$('impPanel').style.display='none';impMsg('');draw2()};
+$('bgDel').onclick=()=>{$('zImg').style.display='none';bg=null;calib=[];$('impPanel').style.display='none';impMsg('');draw2()};
 addEventListener('resize',()=>{fit2();resize3()});
 $('lw').value=S.land.w;$('ll').value=S.land.l;$('hgt').value=S.h;$('wcol').value=S.wc;$('fcol').value=S.fc;
 fit2();resize3();build3D();renderFloors();stats();viewOut();loop();
