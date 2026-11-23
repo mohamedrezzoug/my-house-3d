@@ -67,7 +67,7 @@ td.n,th.n{text-align:end;font-variant-numeric:tabular-nums}
     <div class="row"><button id="impBtn" class="big">📥 صورة / DXF</button><input type="file" id="impFile" accept="image/*,.dxf,.pdf,application/pdf" style="display:none"></div>
     <div id="impPanel" style="display:none;gap:5px;flex-direction:column">
       <div class="row" id="pdfRow" style="display:none"><label>صفحة PDF <select id="pdfPg"></select></label></div>
-      <div class="row"><button id="bgCal">📏 معايرة</button><button id="bgMove">✋ تحريك الصورة</button><button id="bgDet" class="on">🧱 كشف الجدران</button><button id="bgDel">✖</button></div>
+      <div class="row"><button id="bgCal">📏 معايرة</button><button id="bgCrop">✂️ حدد المنطقة</button><button id="bgMove">✋ تحريك الصورة</button><button id="bgDet" class="on">🧱 كشف الجدران</button><button id="bgDel">✖</button></div>
       <div class="row"><label>شفافية <input type="range" id="bgOp" min="10" max="100" value="60"></label></div>
       <div class="row" id="calRow" style="display:none"><label>المسافة الحقيقية <input type="number" id="calD" value="5" step="0.1" min="0.1"> م</label><button id="calOk">طبق</button></div>
     </div>
@@ -180,7 +180,7 @@ function hitItem(x,y,fl=F()){
 /* ================= 2D ================= */
 const c2=$('c2d'),x2=c2.getContext('2d');
 let sc=20,ox=0,oy=0,drag=null,hover=null,dragItem=null;
-let bg=null,calib=[],dragBg=null,panning=null,pinch=null,pinched=false,calibPend=null;const ptrs=new Map();
+let bg=null,calib=[],dragBg=null,panning=null,pinch=null,pinched=false,calibPend=null,cropDrag=null,cropRect=null;const ptrs=new Map();
 const DPR=()=>devicePixelRatio||1;
 function fit2(){
   const r=c2.parentElement.getBoundingClientRect(),d=DPR();
@@ -221,6 +221,7 @@ function draw2(){
   }
   if(hover&&(tool==='door'||tool==='window')){x2.fillStyle=tool==='door'?'#f59e0b':'#38bdf8';x2.beginPath();x2.arc(hover.px*sc,hover.py*sc,7,0,7);x2.fill()}
   if(hover&&hover.ghost){drawItem2(hover.ghost,true)}
+  {const cr=cropDrag?{x:Math.min(cropDrag.x1,cropDrag.x2),y:Math.min(cropDrag.y1,cropDrag.y2),w:Math.abs(cropDrag.x2-cropDrag.x1),h:Math.abs(cropDrag.y2-cropDrag.y1)}:cropRect;if(cr){x2.save();x2.strokeStyle='#f59e0b';x2.lineWidth=2.5;x2.setLineDash([8,5]);x2.strokeRect(cr.x*sc,cr.y*sc,cr.w*sc,cr.h*sc);x2.restore()}}
   if(calib.length){x2.strokeStyle='#f43f5e';x2.fillStyle='#f43f5e';x2.lineWidth=2;calib.forEach(p=>{x2.beginPath();x2.arc(p[0]*sc,p[1]*sc,6,0,7);x2.fill()});if(calib.length>1){x2.beginPath();x2.moveTo(calib[0][0]*sc,calib[0][1]*sc);x2.lineTo(calib[1][0]*sc,calib[1][1]*sc);x2.stroke()}}
   x2.restore();
 }
@@ -266,7 +267,8 @@ function down(e){
   if(ptrs.size===1)pinched=false;
   if(ptrs.size>=2){pinched=true;calibPend=null;drag=null;dragItem=null;dragBg=null;panning=null;const a=[...ptrs.values()],r=c2.getBoundingClientRect(),d=c2.width/r.width,cx=((a[0][0]+a[1][0])/2-r.left)*d,cy=((a[0][1]+a[1][1])/2-r.top)*d;pinch={d:Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1]),sc:sc,w:[(cx-ox)/sc,(cy-oy)/sc]};return}
   if(e.button===1||e.button===2||tool==='pan'||keys[' ']){panning={x:e.clientX,y:e.clientY};return}const[px,py]=ptr(e);const[rx,ry]=toW(px,py);let[x,y]=clampLand(snap(rx),snap(ry));
-  if(tool==='calib'){calibPend={rx,ry,cx:e.clientX,cy:e.clientY}}
+  if(tool==='crop'){cropDrag={x1:rx,y1:ry,x2:rx,y2:ry}}
+  else if(tool==='calib'){calibPend={rx,ry,cx:e.clientX,cy:e.clientY}}
   else if(tool==='bgmove'&&bg){dragBg={dx:bg.x-rx,dy:bg.y-ry}}
   else if(tool==='wall'){drag={x1:x,y1:y,x2:x,y2:y}}
   else if(tool==='door'||tool==='window'){
@@ -289,8 +291,9 @@ function move(e){
   if(ptrs.has(e.pointerId))ptrs.set(e.pointerId,[e.clientX,e.clientY]);
   if(pinch&&ptrs.size>=2){const a=[...ptrs.values()],r=c2.getBoundingClientRect(),d=c2.width/r.width,dist=Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1]),cx=((a[0][0]+a[1][0])/2-r.left)*d,cy=((a[0][1]+a[1][1])/2-r.top)*d;
     sc=Math.max(3,Math.min(400,pinch.sc*dist/pinch.d));ox=cx-pinch.w[0]*sc;oy=cy-pinch.w[1]*sc;draw2();return}
+  if(cropDrag){const[rx,ry]=toW(e.clientX,e.clientY);cropDrag.x2=rx;cropDrag.y2=ry;draw2();return}
   if(panning){const r=c2.getBoundingClientRect(),d=c2.width/r.width;ox+=(e.clientX-panning.x)*d;oy+=(e.clientY-panning.y)*d;panning={x:e.clientX,y:e.clientY};draw2();return}
-  if(e.target!==c2&&!drag&&!dragItem&&!dragBg)return;
+  if(e.target!==c2&&!drag&&!dragItem&&!dragBg&&!cropDrag)return;
   const[px,py]=ptr(e);const[rx,ry]=toW(px,py);let x=snap(rx),y=snap(ry);[x,y]=clampLand(x,y);
   if(dragBg){bg.x=rx+dragBg.dx;bg.y=ry+dragBg.dy;draw2();return}
   if(drag){
@@ -305,6 +308,7 @@ function up(e){
   if(e&&e.pointerId!==undefined)ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;
   if(calibPend&&e&&!pinched&&ptrs.size===0&&Math.hypot(e.clientX-calibPend.cx,e.clientY-calibPend.cy)<12){if(calib.length>=2)calib=[];calib.push([calibPend.rx,calibPend.ry]);if(calib.length===2)$('calRow').style.display='flex';draw2()}
   calibPend=null;
+  if(cropDrag){const c=cropDrag;cropDrag=null;const r={x:Math.min(c.x1,c.x2),y:Math.min(c.y1,c.y2),w:Math.abs(c.x2-c.x1),h:Math.abs(c.y2-c.y1)};cropRect=(r.w>0.3&&r.h>0.3)?r:null;setTool('wall');impMsg(cropRect?'✅ تحددات المنطقة. دابا 📏 عاير (داخلها أو برا)، ومن بعد 🧱 كشف الجدران غادي يخدم غير فيها.':'المنطقة صغيرة بزاف، عاود.');draw2()}
   panning=null;dragBg=null;
   if(drag){const L=Math.hypot(drag.x2-drag.x1,drag.y2-drag.y1);
     if(L>=0.5){pushHist();F().walls.push({...drag});F().rooms=[];commit()}
@@ -628,7 +632,7 @@ $('exRep').onclick=()=>{
 $('demo').onclick=()=>{$('aiTxt').value='أرض 120 متر مربع، منزل من طابقين، 3 غرف نوم، صالون، مطبخ ومرآب، الميزانية 650 ألف درهم';aiRun()};
 
 /* ================= استيراد مخطط 2D ================= */
-function setTool(t){tool=t;document.querySelectorAll('#tools button,#items button,#impPanel button,#zPan').forEach(x=>x.classList.toggle('on',x.dataset.t===t||(t==='calib'&&x.id==='bgCal')||(t==='bgmove'&&x.id==='bgMove')));hover=null;draw2()}
+function setTool(t){tool=t;document.querySelectorAll('#tools button,#items button,#impPanel button,#zPan').forEach(x=>x.classList.toggle('on',x.dataset.t===t||(t==='calib'&&x.id==='bgCal')||(t==='bgmove'&&x.id==='bgMove')||(t==='crop'&&x.id==='bgCrop')));hover=null;draw2()}
 const impMsg=t=>$('impMsg').innerHTML=t;
 function mergePairs(segs,maxGap=0.45){
   const H=[],V=[],O=[];
@@ -669,7 +673,9 @@ function detectFromImage(){
   const cv=document.createElement('canvas');cv.width=W;cv.height=H;const cx=cv.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,W,H);cx.drawImage(im,0,0,W,H);
   const d=cx.getImageData(0,0,W,H).data,dark=new Uint8Array(W*H);
   for(let i=0;i<W*H;i++)dark[i]=(0.3*d[i*4]+0.59*d[i*4+1]+0.11*d[i*4+2])<120?1:0;
-  const pm=bg.s*(im.width/W),minLen=Math.max(4,Math.round(0.9/pm)),tol=Math.max(2,Math.round(0.15/pm)),maxTh=0.6/pm;
+  const pm=bg.s*(im.width/W);
+  if(cropRect){const a=(cropRect.x-bg.x)/pm,b2=(cropRect.y-bg.y)/pm,c=a+cropRect.w/pm,dd=b2+cropRect.h/pm;for(let j=0;j<H;j++)for(let i=0;i<W;i++)if(i<a||i>c||j<b2||j>dd)dark[j*W+i]=0}
+  const minLen=Math.max(4,Math.round(0.9/pm)),tol=Math.max(2,Math.round(0.15/pm)),maxTh=0.6/pm;
   const scan=horiz=>{
     const A=horiz?H:W,B=horiz?W:H,get=(a,b)=>horiz?dark[a*W+b]:dark[b*W+a];
     let active=[],out=[];
@@ -736,9 +742,9 @@ $('impFile').onchange=e=>{
   img.src=url;
 };
 function setBg(img){
-  bg={img,x:0.5,y:0.5,s:(S.land.w*0.9)/img.width,op:0.6};calib=[];$('zImg').style.display='';
+  cropRect=null;bg={img,x:0.5,y:0.5,s:(S.land.w*0.9)/img.width,op:0.6};calib=[];$('zImg').style.display='';
   $('bgOp').value=60;$('impPanel').style.display='flex';$('calRow').style.display='none';
-  fitImage();impMsg('الصورة تحطات فالمخطط. 1) 📏 <b>معايرة</b>: كليكي على نقطتين بينهم مسافة معروفة وكتب المسافة. 2) 🧱 <b>كشف الجدران</b>.');
+  fitImage();impMsg('الصورة تحطات فالمخطط. إلى كانت الصفحة فيها رسومات بزاف: 1) ✂️ <b>حدد المنطقة</b> ديال المخطط. 2) 📏 <b>معايرة</b> (كبّر وكليكي على نقطتين بينهم مسافة معروفة). 3) 🧱 <b>كشف الجدران</b>.');
 }
 let pdfDoc=null;
 async function renderPdfPage(n){
@@ -762,6 +768,7 @@ async function loadPdf(f){
 $('pdfPg').onchange=e=>renderPdfPage(+e.target.value);
 $('bgCal').onclick=()=>{calib=[];$('calRow').style.display='none';setTool('calib');impMsg('كبّر الصورة (عجلة الفأرة، أو ➕، أو قرص بإصبعين)، وكليكي على نقطة أولى ثم ثانية (مثلاً طرفي جدار طولو معروف). التحريك: 🖐️ أو كليك يمين أو Space.')};
 $('bgMove').onclick=()=>setTool('bgmove');
+$('bgCrop').onclick=()=>{setTool('crop');impMsg('اسحب مستطيل فوق مخطط الطابق اللي بغيتي (مثلاً REZ DE CHAUSSÉE) وخلي الباقي.')};
 $('bgOp').oninput=e=>{if(bg){bg.op=e.target.value/100;draw2()}};
 $('calOk').onclick=()=>{
   if(!bg||calib.length<2)return;const real=+$('calD').value,dist=Math.hypot(calib[1][0]-calib[0][0],calib[1][1]-calib[0][1]);
@@ -770,7 +777,7 @@ $('calOk').onclick=()=>{
   impMsg(`✅ تمت المعايرة. حجم الصورة: ${(bg.img.width*bg.s).toFixed(1)}×${(bg.img.height*bg.s).toFixed(1)} م. دابا 🧱 كشف الجدران.`);
 };
 $('bgDet').onclick=detectFromImage;
-$('bgDel').onclick=()=>{$('zImg').style.display='none';bg=null;calib=[];$('impPanel').style.display='none';impMsg('');draw2()};
+$('bgDel').onclick=()=>{cropRect=null;$('zImg').style.display='none';bg=null;calib=[];$('impPanel').style.display='none';impMsg('');draw2()};
 addEventListener('resize',()=>{fit2();resize3()});
 $('lw').value=S.land.w;$('ll').value=S.land.l;$('hgt').value=S.h;$('wcol').value=S.wc;$('fcol').value=S.fc;
 fit2();resize3();build3D();renderFloors();stats();viewOut();loop();
