@@ -180,7 +180,7 @@ function hitItem(x,y,fl=F()){
 /* ================= 2D ================= */
 const c2=$('c2d'),x2=c2.getContext('2d');
 let sc=20,ox=0,oy=0,drag=null,hover=null,dragItem=null;
-let bg=null,calib=[],dragBg=null,panning=null,pinch=null;const ptrs=new Map();
+let bg=null,calib=[],dragBg=null,panning=null,pinch=null,pinched=false,calibPend=null;const ptrs=new Map();
 const DPR=()=>devicePixelRatio||1;
 function fit2(){
   const r=c2.parentElement.getBoundingClientRect(),d=DPR();
@@ -261,10 +261,12 @@ const clampLand=(x,y)=>[Math.max(0,Math.min(S.land.w,x)),Math.max(0,Math.min(S.l
 const ptr=e=>{const t=e.touches?e.touches[0]||e.changedTouches[0]:e;return[t.clientX,t.clientY]};
 function down(e){
   e.preventDefault();
+  if(e.pointerType==='mouse'||e.isPrimary)ptrs.clear();
   ptrs.set(e.pointerId,[e.clientX,e.clientY]);
-  if(ptrs.size>=2){drag=null;dragItem=null;dragBg=null;panning=null;const a=[...ptrs.values()],r=c2.getBoundingClientRect(),d=c2.width/r.width,cx=((a[0][0]+a[1][0])/2-r.left)*d,cy=((a[0][1]+a[1][1])/2-r.top)*d;pinch={d:Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1]),sc:sc,w:[(cx-ox)/sc,(cy-oy)/sc]};return}
+  if(ptrs.size===1)pinched=false;
+  if(ptrs.size>=2){pinched=true;calibPend=null;drag=null;dragItem=null;dragBg=null;panning=null;const a=[...ptrs.values()],r=c2.getBoundingClientRect(),d=c2.width/r.width,cx=((a[0][0]+a[1][0])/2-r.left)*d,cy=((a[0][1]+a[1][1])/2-r.top)*d;pinch={d:Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1]),sc:sc,w:[(cx-ox)/sc,(cy-oy)/sc]};return}
   if(e.button===1||e.button===2||tool==='pan'||keys[' ']){panning={x:e.clientX,y:e.clientY};return}const[px,py]=ptr(e);const[rx,ry]=toW(px,py);let[x,y]=clampLand(snap(rx),snap(ry));
-  if(tool==='calib'){if(calib.length>=2)calib=[];calib.push([rx,ry]);if(calib.length===2)$('calRow').style.display='flex';draw2()}
+  if(tool==='calib'){calibPend={rx,ry,cx:e.clientX,cy:e.clientY}}
   else if(tool==='bgmove'&&bg){dragBg={dx:bg.x-rx,dy:bg.y-ry}}
   else if(tool==='wall'){drag={x1:x,y1:y,x2:x,y2:y}}
   else if(tool==='door'||tool==='window'){
@@ -301,6 +303,8 @@ function move(e){
 }
 function up(e){
   if(e&&e.pointerId!==undefined)ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;
+  if(calibPend&&e&&!pinched&&ptrs.size===0&&Math.hypot(e.clientX-calibPend.cx,e.clientY-calibPend.cy)<12){if(calib.length>=2)calib=[];calib.push([calibPend.rx,calibPend.ry]);if(calib.length===2)$('calRow').style.display='flex';draw2()}
+  calibPend=null;
   panning=null;dragBg=null;
   if(drag){const L=Math.hypot(drag.x2-drag.x1,drag.y2-drag.y1);
     if(L>=0.5){pushHist();F().walls.push({...drag});F().rooms=[];commit()}
@@ -738,11 +742,11 @@ function setBg(img){
 }
 let pdfDoc=null;
 async function renderPdfPage(n){
-  const pg=await pdfDoc.getPage(n),v0=pg.getViewport({scale:1}),sc2=Math.min(3,2200/Math.max(v0.width,v0.height)),v=pg.getViewport({scale:sc2});
+  const pg=await pdfDoc.getPage(n),v0=pg.getViewport({scale:1}),sc2=Math.min(6,6000/Math.max(v0.width,v0.height),Math.sqrt(24e6/(v0.width*v0.height))),v=pg.getViewport({scale:sc2});
   const cv=document.createElement('canvas');cv.width=Math.round(v.width);cv.height=Math.round(v.height);
   const cx=cv.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,cv.width,cv.height);
   await pg.render({canvasContext:cx,viewport:v}).promise;
-  const img=new Image();img.onload=()=>setBg(img);img.src=cv.toDataURL('image/png');
+  setBg(cv);
 }
 async function loadPdf(f){
   impMsg('كنقرا PDF...');
@@ -770,7 +774,7 @@ $('bgDel').onclick=()=>{$('zImg').style.display='none';bg=null;calib=[];$('impPa
 addEventListener('resize',()=>{fit2();resize3()});
 $('lw').value=S.land.w;$('ll').value=S.land.l;$('hgt').value=S.h;$('wcol').value=S.wc;$('fcol').value=S.fc;
 fit2();resize3();build3D();renderFloors();stats();viewOut();loop();
-if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+if('serviceWorker' in navigator&&location.protocol.startsWith('http')){const had=!!navigator.serviceWorker.controller;let rl=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(had&&!rl){rl=true;location.reload()}});navigator.serviceWorker.register('sw.js').catch(()=>{})}
 </script>
 </body>
 </html>
